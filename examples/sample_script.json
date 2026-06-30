@@ -1,0 +1,19 @@
+{
+  "title": "Lemon vs Lime: The Payout",
+  "concept": "Two fruits argue about who is more sour until a coin settles it the Coinplay way.",
+  "format": "fruit-argument",
+  "setting": "a glossy kitchen counter at night, neon rim light, shallow depth of field",
+  "cast": [
+    {"id": "lemon", "name": "Lemon", "design": "an angry cartoon lemon with thick black outlines, tiny arms, furrowed brow, glossy yellow skin", "personality": "loud, cocky", "voice": 1},
+    {"id": "lime", "name": "Lime", "design": "a smug cartoon lime with half-closed eyes, thick outlines, glossy green skin", "personality": "sarcastic, smug", "voice": 2},
+    {"id": "coinplay_host", "name": "Coinplay", "design": "the Coinplay fox mascot", "personality": "cool, confident", "voice": 0}
+  ],
+  "shots": [
+    {"characters": ["lemon", "lime"], "visual": "lemon and lime nose to nose on the counter, sparks between them", "motion": "fast push-in, both characters shaking with anger", "dialogue": [{"speaker": "lemon", "line": "I am the sourest one here!"}, {"speaker": "lime", "line": "In your dreams, yellow boy."}], "mood": "argue"},
+    {"characters": ["lemon", "lime"], "visual": "wide shot, both fruits puffing up, a gold coin spinning in the air above them", "motion": "slow motion coin spin, camera tilts up", "dialogue": [], "mood": "shock"},
+    {"characters": ["coinplay_host", "lemon", "lime"], "visual": "the Coinplay fox mascot lands between them holding the glowing coin", "motion": "mascot struts in, confident pose, fruits lean back", "dialogue": [{"speaker": "coinplay_host", "line": "Stop arguing. On Coinplay everybody cashes out."}], "mood": "reveal"},
+    {"characters": ["coinplay_host"], "visual": "close up of the fox winking at camera, Coinplay logo glow behind", "motion": "subtle zoom, sparkle pop", "dialogue": [{"speaker": "narrator", "line": "Coinplay dot com. Play. Win. Repeat."}], "mood": "hype"}
+  ],
+  "on_screen_hook": "WHO IS MORE SOUR?",
+  "brand_payoff": "On Coinplay everybody cashes out"
+}

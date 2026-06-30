@@ -222,9 +222,10 @@ VEO_RESOLUTION = _opt("VEO_RESOLUTION", "1080p")   # 720p/1080p (для std/fast
 VEO_ASPECT     = _opt("VEO_ASPECT", "9:16")        # вертикаль
 VEO_GENERATE_AUDIO = _flag("VEO_GENERATE_AUDIO", True)   # пусть модель сама говорит
 VEO_SAFETY     = _opt("VEO_SAFETY_TOLERANCE", "4")  # 1 (строго) .. 6 (мягко)
-# Субтитры в Veo-режиме: словных таймкодов нет (нет TTS), поэтому только:
-#   hook — крупный хук-текст первые ~2 c (дефолт);  off — без текста вовсе.
-VEO_CAPTIONS   = _opt("VEO_CAPTIONS", "hook").strip().lower()
+# Субтитры в Veo-режиме: словных таймкодов нет (нет TTS). Дефолт — БЕЗ текста вовсе:
+# чистая картинка Veo «дороже» и вируснее, чем хук, налепленный поверх кадра.
+#   off  — без текста на видео (дефолт);  hook — крупный хук-текст первые ~2 c.
+VEO_CAPTIONS   = _opt("VEO_CAPTIONS", "off").strip().lower()
 # Подкладывать ли фоновую музыку ПОД нативное аудио (по умолчанию нет — у Veo уже
 # есть собственный эмбиент/речь, музыка чаще мешает).
 VEO_MUSIC_UNDER = _flag("VEO_MUSIC_UNDER", False)

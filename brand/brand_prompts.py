@@ -193,6 +193,15 @@ IMAGE_SAFETY_CLAUSE = (
     "image; no nudity, no sexual or suggestive content, no gore."
 )
 
+# Оговорка ОРИГИНАЛЬНОСТИ — против реджектов «interests of third-party content providers»
+# (Veo/Gemini принимают наших антропоморфов за чужой IP: лиса за Зверополис и т.п.).
+# Персонажи и правда оригинальные, поэтому это не обход, а корректное уточнение.
+ORIGINALITY_CLAUSE = (
+    "All characters and elements are completely original designs, not based on or resembling "
+    "any existing movie, game, cartoon, franchise, studio or brand character; no copyrighted "
+    "or trademarked characters, logos or intellectual property."
+)
+
 
 def build_character_ref_prompt(member: dict, setting: str = "") -> str:
     """
@@ -246,18 +255,44 @@ def build_keyframe_prompt(shot: dict, cast_by_id: dict, setting: str = "") -> st
             f"{roster}."
         )
         if len(present) > 1:
-            keep += " Place all of them together in the same scene, interacting naturally."
+            keep += " Place them together in the same scene, interacting naturally."
+        is_broll = False
     else:
-        keep = "Create the scene described below in the brand world."
+        keep = "Cinematic establishing shot of the location below — no characters in frame."
+        is_broll = True
+
+    # Главный сдвиг под вирусный эталон: НЕ позированный портрет, а кадр-стоп
+    # ПИКОВОГО ДЕЙСТВИЯ с динамичной камерой (как стоп-кадр из трейлера), иначе i2v
+    # нечего продолжать и персонаж «стоит столбом».
+    if is_broll:
+        action_line = (
+            "Single photoreal cinematic establishing film still: a moving-camera shot of the "
+            "location with depth, atmosphere and momentum (low racing dolly, sweeping crane, or "
+            "push-in), like a B-roll cut from a high-end trailer."
+        )
+    else:
+        action_line = (
+            "Single photoreal cinematic FILM STILL caught at a DYNAMIC PEAK-ACTION moment — the "
+            "subject MID-MOTION (mid-stride, mid-leap, mid-gesture, mid-reaction), NOT a static "
+            "pose; bold dynamic camera angle (low hero angle, over-the-shoulder, dutch tilt, or "
+            "moving-camera motion blur); strong sense of momentum, as if grabbed from a high-end "
+            "animated-feature trailer."
+        )
 
     parts = [
         keep,
         f"Scene: {sanitize_scene_text(shot.get('visual','').strip())}.",
         (f"Setting: {setting.strip()}." if setting else ""),
         SCENE_MOODS.get(str(shot.get("mood", "")).lower().strip(), ""),
-        BRAND_WORLD + ".",
-        "Single cinematic keyframe, the characters are the clear foreground subjects, "
-        "film-quality emotional acting with nuanced expressive faces. " + FRAMING_9x16 + ".",
+        action_line,
+        # Бренд — СДЕРЖАННЫЙ акцент в РЕАЛЬНОЙ киношной локации, а не «фиолетовый суп»
+        # на весь кадр: иначе всё выглядит как баннер-реклама, а не как кино из рилса.
+        "Grounded, real cinematic location with believable detail; only SUBTLE brand accents "
+        "(a few violet spheres or golden-coin glints far in the background), never a flat purple "
+        "void. Photoreal animated-feature render: cinematic color grade, volumetric light, "
+        "shallow depth of field, film grain, high dynamic range.",
+        ORIGINALITY_CLAUSE,
+        FRAMING_9x16 + ".",
     ]
     return " ".join(p for p in parts if p)
 
@@ -326,6 +361,7 @@ def build_veo_prompt(shot: dict, cast_by_id: dict, setting: str = "",
         "energetic upbeat music bed under it all. "
         "RENDER: keep every character perfectly on-model and stable (same face, colors, shapes; "
         "no morphing, no extra limbs, no face distortion). "
+        f"{ORIGINALITY_CLAUSE} "
         "ABSOLUTELY NO on-screen text, letters, words, numbers, captions, signage, neon text, "
         "logos, UI or watermarks anywhere in the video — clean textless footage."
     )

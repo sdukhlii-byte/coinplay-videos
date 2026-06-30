@@ -182,6 +182,60 @@ def build_motion_prompt(shot: dict) -> str:
     return f"{motion}. {base}" if motion else base
 
 
+_VEO_LANG_NAMES = {
+    "en": "English", "es": "Spanish", "hr": "Croatian", "lt": "Lithuanian",
+    "lv": "Latvian", "ru": "Russian", "sr": "Serbian", "pl": "Polish",
+}
+
+
+def build_veo_prompt(shot: dict, cast_by_id: dict, setting: str = "",
+                     language: str = "en") -> str:
+    """
+    Промт для Veo 3.1 image-to-video с НАТИВНЫМ аудио. Помимо движения встраиваем
+    блок реплик в формате, который Veo проговаривает с липсинком:
+
+        ...scene/motion...
+        Dialogue:
+        Lemon (angry cartoon lemon): "I am the sourest one here!"
+        Lime (smug cartoon lime): "In your dreams, yellow boy."
+
+    Реплики — на языке ролика; модель сама озвучит нужный голос на персонажа.
+    """
+    motion = shot.get("motion", "").strip()
+    visual = shot.get("visual", "").strip()
+    mood = SCENE_MOODS.get(str(shot.get("mood", "")).lower().strip(), "")
+    lang_name = _VEO_LANG_NAMES.get(language.lower(), language)
+
+    scene = (
+        f"Animate this image. {visual}. {mood} "
+        f"{motion + '. ' if motion else ''}"
+        "Smooth lively 3D cartoon animation, expressive faces, big cartoon acting, "
+        "characters move and emote naturally, subtle cinematic camera. "
+        "Keep every character on-model and stable (no morphing, no extra limbs, no face distortion)."
+    )
+
+    dialogue = [d for d in (shot.get("dialogue") or []) if str(d.get("line", "")).strip()]
+    if dialogue:
+        lines = []
+        for d in dialogue:
+            sp = str(d.get("speaker", "narrator")).strip()
+            if sp == "narrator" or sp not in cast_by_id:
+                who = "Narrator (calm voiceover)"
+            else:
+                m = cast_by_id[sp]
+                who = f"{m.get('name') or sp} ({(m.get('design','') or '').split(',')[0].strip()})"
+            lines.append(f'{who}: "{d["line"].strip()}"')
+        speak = (
+            f"\nThe characters SPEAK their lines out loud in {lang_name} with clear, "
+            f"accurate lip-sync and distinct expressive voices. Natural ambient sound.\n"
+            "Dialogue:\n" + "\n".join(lines)
+        )
+    else:
+        speak = "\nNo speech in this shot — only ambient sound and motion."
+
+    return f"{scene}\nSetting: {setting.strip()}." + speak if setting else f"{scene}{speak}"
+
+
 def build_endcard_cta(brand_payoff: str = "") -> str:
     """Короткий текст для энд-карты (домен бренда)."""
     return brand_payoff.strip() or ""
@@ -300,10 +354,12 @@ _LANG_MAP = {
 
 def build_script_user_prompt(topic: str, language: str, n_shots: int, duration: int,
                              vertical: str = "", fmt: str = "",
-                             allow_mascot: bool = True) -> str:
+                             allow_mascot: bool = True, spoken: bool = False) -> str:
     """
     Собирает user-промт сценаристу. `topic` — бриф/тема (может быть и широкой
     вертикалью). `vertical` и `fmt` — опциональные уточнения.
+    `spoken=True` — режим Veo: персонажи сами проговаривают реплики (липсинк),
+    поэтому реплик меньше и они короче, а шотов меньше (каждый ~8 c).
     """
     lang_name = _LANG_MAP.get(language.lower(), "English")
 
@@ -330,6 +386,16 @@ def build_script_user_prompt(topic: str, language: str, n_shots: int, duration: 
         f"Aim for about {n_shots} shots and ~{duration} seconds total.",
         "Give the characters distinct integer voices (1..4) so they sound different.",
     ]
+
+    if spoken:
+        brief_lines += [
+            "IMPORTANT (spoken mode): each shot becomes a single ~8-second video clip in "
+            "which the characters ACTUALLY SAY their lines out loud with lip-sync. So per "
+            "shot keep at most 1-2 SHORT spoken lines (each comfortably sayable in a few "
+            "seconds). Avoid long monologues. Make the dialogue punchy and natural to speak. "
+            "Prefer fewer shots (2-4), each a self-contained beat that reads as one continuous "
+            "take. The brand payoff should be a short spoken line, not a slogan card.",
+        ]
 
     if allow_mascot:
         brief_lines.append(

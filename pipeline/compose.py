@@ -192,3 +192,117 @@ def compose(workdir: str, shot_clips: list[str], shot_durations: list[float],
     concat_final(body_final, endcard, out_path, workdir)
     log.info("Composed final video: %s (%.2fs)", out_path, probe_duration(out_path))
     return out_path
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  НАТИВНОЕ АУДИО (Veo 3.1): звук уже ВНУТРИ клипов (речь+эмбиент), TTS не нужен.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def normalize_shot_av(src: str, dst: str) -> None:
+    """
+    Клип → кадр VIDEO_WxVIDEO_H (cover-crop), FPS, СОХРАНЯЯ аудио. Длину НЕ трогаем
+    (натуральная длина клипа Veo). Если у клипа нет звука (фолбэк Ken Burns) —
+    подкладываем тишину, чтобы конкат с остальными (со звуком) не ломался.
+    """
+    from pipeline.media import has_audio
+    vf = (
+        f"scale={C.VIDEO_W}:{C.VIDEO_H}:force_original_aspect_ratio=increase,"
+        f"crop={C.VIDEO_W}:{C.VIDEO_H},fps={C.FPS},setsar=1"
+    )
+    if has_audio(src):
+        run_ff([
+            "ffmpeg", "-y", "-i", src,
+            "-vf", vf,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(C.FPS),
+            "-profile:v", "high", "-preset", "veryfast",
+            "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
+            dst,
+        ], label="normalize_av")
+    else:
+        run_ff([
+            "ffmpeg", "-y", "-i", src,
+            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+            "-vf", vf, "-shortest",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(C.FPS),
+            "-profile:v", "high", "-preset", "veryfast",
+            "-c:a", "aac", "-b:a", "160k",
+            dst,
+        ], label="normalize_av_silent")
+
+
+def burn_native(body: str, ass_path: str | None, logo_path: str,
+                music_path: str | None, dst: str) -> None:
+    """
+    Прожиг для Veo-режима: видео берёт СВОЙ звук из body (речь персонажей).
+    Опционально подмешиваем тихую фоновую музыку. Субтитры (если есть ass_path) —
+    обычно только хук. Лого — оверлеем. Длину диктует body (без -t).
+    """
+    inputs = ["-i", body, "-i", logo_path]
+    has_music = bool(music_path and os.path.exists(music_path))
+    if has_music:
+        inputs += ["-stream_loop", "-1", "-i", music_path]
+
+    logo_w = int(C.VIDEO_W * 0.30)
+    if ass_path:
+        ass_arg = ass_path.replace("\\", "/").replace(":", "\\:").replace("'", "")
+        fonts_dir = C.FONTS_DIR.replace("\\", "/").replace(":", "\\:")
+        v_chain = f"[0:v]subtitles='{ass_arg}':fontsdir='{fonts_dir}'[vs];"
+    else:
+        v_chain = "[0:v]null[vs];"
+
+    fc = (
+        v_chain +
+        f"[1:v]scale={logo_w}:-1[logo];"
+        f"[vs][logo]overlay=W-w-40:40:format=auto[vout];"
+        f"[0:a]aresample=44100[voc]"
+    )
+    if has_music:
+        fc += (
+            f";[2:a]volume={C.MUSIC_VOLUME},aresample=44100[mus];"
+            f"[voc][mus]amix=inputs=2:duration=first:dropout_transition=0,"
+            f"loudnorm=I=-16:TP=-1.5:LRA=11[aout]"
+        )
+    else:
+        fc += ";[voc]loudnorm=I=-16:TP=-1.5:LRA=11[aout]"
+
+    run_ff([
+        "ffmpeg", "-y", *inputs,
+        "-filter_complex", fc,
+        "-map", "[vout]", "-map", "[aout]",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "medium", "-crf", "20",
+        "-c:a", "aac", "-b:a", "160k", "-r", str(C.FPS),
+        "-movflags", "+faststart", dst,
+    ], label="burn_native")
+
+
+def compose_native(workdir: str, shot_clips: list[str], ass_path: str | None,
+                   logo_path: str, music_path: str | None, cta_text: str,
+                   out_path: str) -> str:
+    """
+    Сборка для Veo-режима. Звук берётся из самих клипов (речь+эмбиент).
+    Нет паддинга голоса и нет инварианта d_i — длину диктуют клипы.
+    """
+    # 1. нормализация шотов c сохранением аудио
+    norm = []
+    for i, clip in enumerate(shot_clips):
+        dst = os.path.join(workdir, f"norm_{i:02d}.mp4")
+        normalize_shot_av(clip, dst)
+        norm.append(dst)
+
+    # 2. склейка A/V (реэнкод — параметры уже унифицированы нормализацией)
+    body = os.path.join(workdir, "body.mp4")
+    _concat_demux(norm, body, workdir, reencode=True, label="body_av")
+
+    # 3. прожиг: своё аудио (+опц. музыка) + субтитры(хук) + лого
+    body_final = os.path.join(workdir, "body_final.mp4")
+    burn_native(body, ass_path, logo_path, music_path, body_final)
+
+    # 4. эндкарта
+    endcard = os.path.join(workdir, "endcard.mp4")
+    make_endcard(logo_path, endcard, cta_text=cta_text)
+
+    # 5. финал
+    concat_final(body_final, endcard, out_path, workdir)
+    log.info("Composed final (native audio): %s (%.2fs)", out_path, probe_duration(out_path))
+    return out_path

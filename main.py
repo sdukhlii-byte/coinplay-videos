@@ -32,8 +32,8 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import config as C
-from pipeline import clients, script_writer, visuals, voice as voicegen, captions, compose
-from brand.brand_prompts import build_endcard_cta, MASCOT_ID
+from pipeline import clients, script_writer, visuals, voice as voicegen, captions, compose, media
+from brand.brand_prompts import MASCOT_ID
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("main")
@@ -69,27 +69,22 @@ def _field(fields: dict, key: str, default=""):
 def _build_video(workdir: str, script: dict, language: str,
                  out_path: str) -> dict:
     """
-    Полный рендер ролика из нормализованного сценария. Возвращает метаданные
-    (длительность, число шотов и т.п.). Вынесено отдельно — переиспользуется
-    в CLI для локального прогона.
+    Полный рендер ролика из нормализованного сценария. Возвращает метаданные.
+    Маршрут зависит от C.VIDEO_ENGINE:
+      • veo   — Veo 3.1: персонажи сами говорят (нативное аудио), без TTS;
+      • kling — Kling i2v без звука + закадр ElevenLabs + пословные субтитры.
+    Вынесено отдельно — переиспользуется в CLI для локального прогона.
     """
     cast = script.get("cast", [])
     shots = script["shots"]
     setting = script.get("setting", "")
-
     cast_by_id = {m["id"]: m for m in cast}
-    # speaker → индекс голосового профиля (narrator=0, маскот=0, прочие=1..4)
-    speaker_roles = {"narrator": 0}
-    for m in cast:
-        speaker_roles[m["id"]] = int(m.get("voice", 0))
-    # цвет активного слова по говорящему (narrator → белый)
-    speaker_colors = captions.palette_for([m["id"] for m in cast])
-
     n = len(shots)
-    log.info("Render: cast=%d shots=%d lang=%s setting=%r",
-             len(cast), n, language, setting[:60])
 
-    # ── Фаза 1: референсы каста (параллельно). Маскот попадает сюда, если он в касте.
+    log.info("Render[%s]: cast=%d shots=%d lang=%s setting=%r",
+             C.VIDEO_ENGINE, len(cast), n, language, setting[:60])
+
+    # ── Фаза 1: референсы каста (параллельно). Общая для обоих маршрутов.
     cast_refs: dict[str, dict] = {}
     if cast:
         cast_refs = visuals.generate_cast(workdir, cast, setting, parallel=True)
@@ -97,14 +92,83 @@ def _build_video(workdir: str, script: dict, language: str,
     else:
         log.info("No cast (narrator-only) — keyframes via text-to-image")
 
-    # ── Фаза 2: по шотам ПАРАЛЛЕЛЬНО кейфрейм + озвучка (независимы друг от друга).
-    keyframes: list[tuple[str, str]] = [("", "")] * n     # (url, path)
-    voices: list[tuple[str, float, list[dict]]] = [("", 0.0, [])] * n
+    meta_common = {"shots": n, "cast": [m["id"] for m in cast],
+                   "has_mascot": MASCOT_ID in cast_by_id}
 
-    def _do_keyframe(i: int):
+    if C.VIDEO_ENGINE == "veo":
+        return _render_veo(workdir, script, language, shots, cast_by_id,
+                           cast_refs, setting, out_path, meta_common)
+    return _render_tts(workdir, script, language, shots, cast, cast_by_id,
+                       cast_refs, setting, out_path, meta_common)
+
+
+# ── МАРШРУТ VEO 3.1 (нативное аудио, персонажи сами говорят) ───────────────────
+
+def _render_veo(workdir, script, language, shots, cast_by_id, cast_refs,
+                setting, out_path, meta_common) -> dict:
+    n = len(shots)
+
+    # Кейфреймы (параллельно) — якорь консистентности персонажей.
+    keyframes: list[tuple[str, str]] = [("", "")] * n
+
+    def _do_keyframe(i):
         return i, visuals.generate_keyframe(workdir, i, shots[i], cast_refs, cast_by_id, setting)
 
-    def _do_voice(i: int):
+    with ThreadPoolExecutor(max_workers=max(1, min(C.MAX_PARALLEL_JOBS, n))) as ex:
+        for fut in as_completed([ex.submit(_do_keyframe, i) for i in range(n)]):
+            idx, kf = fut.result()
+            keyframes[idx] = kf
+
+    # Veo i2v со звуком (параллельно). Каждый шот = ~8-сек клип, где персонажи говорят.
+    clips: list[str] = [""] * n
+
+    def _do_anim(i):
+        kf_url, kf_path = keyframes[i]
+        return i, visuals.animate_shot(
+            workdir, i, kf_url, kf_path, shots[i], target_sec=8.0,
+            cast_by_id=cast_by_id, setting=setting, language=language,
+        )
+
+    with ThreadPoolExecutor(max_workers=max(1, min(C.MAX_PARALLEL_JOBS, n))) as ex:
+        for fut in as_completed([ex.submit(_do_anim, i) for i in range(n)]):
+            idx, path = fut.result()
+            clips[idx] = path
+
+    durations = [media.probe_duration(c) for c in clips]
+
+    # Субтитры: в Veo-режиме словных таймкодов нет — максимум хук-текст сверху.
+    ass_path = None
+    if C.VEO_CAPTIONS != "off" and script.get("on_screen_hook"):
+        ass_path = os.path.join(workdir, "subs.ass")
+        captions.build_ass([], ass_path, C.VIDEO_W, C.VIDEO_H,
+                           font_name=C.FONT_DISPLAY_NAME,
+                           on_screen_hook=script["on_screen_hook"], hook_until=2.5)
+
+    music = _pick_music() if C.VEO_MUSIC_UNDER else None
+    compose.compose_native(workdir, clips, ass_path, C.LOGO_PATH, music,
+                           C.CTA_TEXT, out_path)
+
+    return {"duration": sum(durations), **meta_common}
+
+
+# ── МАРШРУТ KLING + ELEVENLABS (закадр поверх, пословные субтитры) ─────────────
+
+def _render_tts(workdir, script, language, shots, cast, cast_by_id, cast_refs,
+                setting, out_path, meta_common) -> dict:
+    n = len(shots)
+    # speaker → индекс голосового профиля (narrator=0, маскот=0, прочие=1..4)
+    speaker_roles = {"narrator": 0}
+    for m in cast:
+        speaker_roles[m["id"]] = int(m.get("voice", 0))
+    speaker_colors = captions.palette_for([m["id"] for m in cast])
+
+    keyframes: list[tuple[str, str]] = [("", "")] * n
+    voices: list[tuple[str, float, list[dict]]] = [("", 0.0, [])] * n
+
+    def _do_keyframe(i):
+        return i, visuals.generate_keyframe(workdir, i, shots[i], cast_refs, cast_by_id, setting)
+
+    def _do_voice(i):
         return i, voicegen.synthesize_shot(workdir, i, shots[i].get("dialogue", []),
                                            speaker_roles, language)
 
@@ -116,42 +180,34 @@ def _build_video(workdir: str, script: dict, language: str,
             futs.append(ex.submit(_do_voice, i))
         for fut in as_completed(futs):
             res = fut.result()
-            idx = res[0]
-            payload = res[1]
-            # различаем тип результата по форме кортежа
+            idx, payload = res[0], res[1]
             if isinstance(payload, tuple) and len(payload) == 2:
-                keyframes[idx] = payload                 # (url, path)
+                keyframes[idx] = payload
             else:
-                voices[idx] = payload                    # (wav, dur, words)
+                voices[idx] = payload
 
-    # длины шотов d_i по реальной озвучке (+хвост), не короче минимума
     durations = [max(voices[i][1] + C.VOICE_TAIL_SEC, C.MIN_SHOT_SEC) for i in range(n)]
 
-    # ── Фаза 3: анимация шотов (параллельно). Каждому нужен свой кейфрейм + d_i.
     hero = _hero_shots()
     clips: list[str] = [""] * n
 
-    def _do_anim(i: int):
+    def _do_anim(i):
         kf_url, kf_path = keyframes[i]
         return i, visuals.animate_shot(workdir, i, kf_url, kf_path, shots[i],
                                        durations[i], hero=(i in hero))
 
     with ThreadPoolExecutor(max_workers=max(1, min(C.MAX_PARALLEL_JOBS, n))) as ex:
-        futs = [ex.submit(_do_anim, i) for i in range(n)]
-        for fut in as_completed(futs):
+        for fut in as_completed([ex.submit(_do_anim, i) for i in range(n)]):
             idx, path = fut.result()
             clips[idx] = path
 
-    # ── Субтитры: склейка пословных таймингов в глобальный таймлайн (offset по d_i).
     words_global: list[dict] = []
     cursor = 0.0
     for i in range(n):
         for w in voices[i][2]:
             words_global.append({
-                "word": w["word"],
-                "start": cursor + w["start"],
-                "end": cursor + w["end"],
-                "speaker": w.get("speaker", "narrator"),
+                "word": w["word"], "start": cursor + w["start"],
+                "end": cursor + w["end"], "speaker": w.get("speaker", "narrator"),
             })
         cursor += durations[i]
 
@@ -163,25 +219,14 @@ def _build_video(workdir: str, script: dict, language: str,
         speaker_colors=speaker_colors,
     )
 
-    # ── Сборка. Эндкарта — короткий бренд-CTA (домен); пейофф звучит/виден в теле ролика.
     voice_tracks = [voices[i][0] for i in range(n)]
-    cta = build_endcard_cta(script.get("brand_payoff", "")) or C.CTA_TEXT
-    # На эндкарте короткая строка (домен), а не длинная реплика-пейофф:
-    cta_text = C.CTA_TEXT or cta
     compose.compose(
         workdir, clips, durations, voice_tracks, ass_path,
-        logo_path=C.LOGO_PATH,
-        music_path=_pick_music(),
-        cta_text=cta_text,
-        out_path=out_path,
+        logo_path=C.LOGO_PATH, music_path=_pick_music(),
+        cta_text=C.CTA_TEXT, out_path=out_path,
     )
 
-    return {
-        "duration": sum(durations),
-        "shots": n,
-        "cast": [m["id"] for m in cast],
-        "has_mascot": MASCOT_ID in cast_by_id,
-    }
+    return {"duration": sum(durations), **meta_common}
 
 
 def process_record(record: dict):
@@ -197,11 +242,12 @@ def process_record(record: dict):
     vertical = _field(fields, C.F_VERTICAL) or C.DEFAULT_VERTICAL
     fmt      = _field(fields, C.F_FORMAT) or C.DEFAULT_FORMAT
     duration = int(float(_field(fields, C.F_DURATION) or C.DEFAULT_DURATION))
-    n_shots  = int(float(_field(fields, C.F_SHOTS) or C.DEFAULT_SHOTS))
+    _default_shots = C.DEFAULT_SHOTS_VEO if C.VIDEO_ENGINE == "veo" else C.DEFAULT_SHOTS
+    n_shots  = int(float(_field(fields, C.F_SHOTS) or _default_shots))
     script_override = _field(fields, C.F_SCRIPT_IN)
 
-    log.info("Processing %s: %r lang=%s vertical=%r fmt=%r dur=%ds shots=%d",
-             rid, topic, language, vertical, fmt, duration, n_shots)
+    log.info("Processing %s: %r lang=%s vertical=%r fmt=%r dur=%ds shots=%d engine=%s",
+             rid, topic, language, vertical, fmt, duration, n_shots, C.VIDEO_ENGINE)
     clients.update_record(rid, {C.F_STATUS: C.S_PROGRESS})
 
     workdir = tempfile.mkdtemp(prefix="cpv_")
@@ -215,6 +261,7 @@ def process_record(record: dict):
             script = script_writer.write_script(
                 topic, language, n_shots, duration,
                 vertical=vertical, fmt=fmt, allow_mascot=C.BRAND_MASCOT_CAMEO,
+                spoken=(C.VIDEO_ENGINE == "veo"),
             )
 
         # 2) Рендер

@@ -63,12 +63,14 @@ def cmd_concept(args):
 def cmd_storyboard(args):
     from brand.brand_prompts import (
         build_character_ref_prompt, build_mascot_ref_prompt,
-        build_keyframe_prompt, build_motion_prompt, MASCOT_ID,
+        build_keyframe_prompt, build_motion_prompt, build_veo_prompt, MASCOT_ID,
     )
+    import config as C
     script = _load_script(args.script)
     cast = script.get("cast", [])
     cast_by_id = {m["id"]: m for m in cast}
     setting = script.get("setting", "")
+    lang = getattr(args, "lang", "en") or "en"
 
     print(f"# {script.get('title','(no title)')}")
     if script.get("concept"):
@@ -90,7 +92,10 @@ def cmd_storyboard(args):
         print(f"\n--- shot {i} | mood={shot.get('mood')} "
               f"| chars={','.join(shot.get('characters', []))} ---")
         print(f"[keyframe]\n{build_keyframe_prompt(shot, cast_by_id, setting)}")
-        print(f"[motion]\n{build_motion_prompt(shot)}")
+        if C.VIDEO_ENGINE == "veo":
+            print(f"[veo prompt + dialogue]\n{build_veo_prompt(shot, cast_by_id, setting, lang)}")
+        else:
+            print(f"[motion]\n{build_motion_prompt(shot)}")
         dlg = shot.get("dialogue", [])
         if dlg:
             print("[dialogue]")
@@ -134,6 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("storyboard", help="печать всех промптов для готового сценария (офлайн)")
     sp.add_argument("script", help="путь к JSON-сценарию")
+    sp.add_argument("--lang", default="en")
     sp.set_defaults(func=cmd_storyboard)
 
     sp = sub.add_parser("render", help="собрать mp4 из готового сценария (нужны ключи)")

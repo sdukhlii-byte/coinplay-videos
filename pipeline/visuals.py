@@ -133,12 +133,50 @@ def _quantize_duration(target_sec: float) -> int:
 
 
 def animate_shot(workdir: str, idx: int, keyframe_url: str, keyframe_path: str,
-                 shot: dict, target_sec: float, hero: bool = False) -> str:
+                 shot: dict, target_sec: float, hero: bool = False,
+                 cast_by_id: dict | None = None, setting: str = "",
+                 language: str = "en") -> str:
     """
-    Создаёт видеоклип шота, возвращает local_path. Аудио НЕ генерим (свой голос).
-    Если i2v падает (таймаут/ошибка модели) и включён фолбэк — собираем клип
-    из кейфрейма (Ken Burns), чтобы ролик всё равно достроился.
+    Создаёт видеоклип шота, возвращает local_path.
+
+    Режим C.VIDEO_ENGINE:
+      • veo   — Veo 3.1 i2v с НАТИВНЫМ аудио: персонажи сами проговаривают реплики
+                (липсинк + эмбиент). Звук уже ВНУТРИ клипа, отдельный TTS не нужен.
+      • kling — Kling i2v без звука (голос кладётся отдельно через ElevenLabs).
+
+    При сбое i2v и включённом фолбэке собираем немой клип из кейфрейма (Ken Burns).
     """
+    if C.VIDEO_ENGINE == "veo":
+        from brand.brand_prompts import build_veo_prompt
+        model = C.veo_i2v_model()
+        payload = {
+            "prompt": build_veo_prompt(shot, cast_by_id or {}, setting, language),
+            "image_url": keyframe_url,                # Veo i2v берёт ОДНУ картинку
+            "aspect_ratio": C.VEO_ASPECT,
+            "duration": C.VEO_DURATION,               # строка "8s"/"6s"/"4s"
+            "resolution": C.VEO_RESOLUTION,
+            "generate_audio": C.VEO_GENERATE_AUDIO,   # ← модель сама говорит
+            "negative_prompt": C.I2V_NEGATIVE,
+            "safety_tolerance": C.VEO_SAFETY,
+        }
+        try:
+            res = falclient.run(model, payload, timeout=900, label=f"veo{idx}")
+            url = falclient.first_video_url(res)
+            path = _download(url, os.path.join(workdir, f"shot_{idx:02d}_raw.mp4"))
+            log.info("Shot %d animated via Veo (%s, audio=%s): %s",
+                     idx, C.VEO_TIER, C.VEO_GENERATE_AUDIO, path)
+            return path
+        except Exception as e:
+            if not C.I2V_FALLBACK_KENBURNS:
+                raise
+            log.warning("Shot %d Veo failed (%s) — Ken Burns fallback (silent)",
+                        idx, str(e)[:140])
+            path = os.path.join(workdir, f"shot_{idx:02d}_raw.mp4")
+            media.ken_burns_clip(keyframe_path, path, max(target_sec, C.MIN_SHOT_SEC),
+                                 C.VIDEO_W, C.VIDEO_H, C.FPS)
+            return path
+
+    # ── kling (или иной) i2v без звука ──────────────────────────────────────────
     model = C.MODELS["image_to_video_hero"] if hero else C.MODELS["image_to_video"]
     dur = _quantize_duration(target_sec)
     payload = {

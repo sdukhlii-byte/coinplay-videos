@@ -131,6 +131,48 @@ I2V_NEGATIVE = _opt(
 # чтобы ролик всё равно достроился, а не падал целиком.
 I2V_FALLBACK_KENBURNS = _flag("I2V_FALLBACK_KENBURNS", True)
 
+# ── ВИДЕО-ДВИЖОК ───────────────────────────────────────────────────────────────
+# VIDEO_ENGINE=veo   — Veo 3.1 image-to-video с НАТИВНЫМ аудио: персонажи сами
+#                      говорят свои реплики с липсинком (+эмбиент). ElevenLabs не
+#                      используется. Длину шота диктует сам клип (до 8 сек).
+# VIDEO_ENGINE=kling — старый маршрут: Kling i2v без звука + закадр ElevenLabs
+#                      поверх + пословные субтитры. Дешевле, полный контроль текста.
+VIDEO_ENGINE = _opt("VIDEO_ENGINE", "veo").strip().lower()
+
+# Тиры Veo 3.1 (качество↔цена, цены за секунду С аудио):
+#   standard — лучшее качество, $0.40/с
+#   fast     — баланс,          $0.15/с   ← дефолт
+#   lite     — дешёвый,         $0.05/с (720p) / $0.08/с (1080p), всегда с аудио
+VEO_TIER = _opt("VEO_TIER", "fast").strip().lower()
+_VEO_ENDPOINTS = {
+    "standard": "fal-ai/veo3.1/image-to-video",
+    "fast":     "fal-ai/veo3.1/fast/image-to-video",
+    "lite":     "fal-ai/veo3.1/lite/image-to-video",
+}
+
+
+def veo_i2v_model() -> str:
+    """Эндпоинт Veo 3.1 i2v по выбранному тиру (или явный override FAL_VEO_MODEL)."""
+    override = _opt("FAL_VEO_MODEL", "")
+    if override:
+        return override
+    return _VEO_ENDPOINTS.get(VEO_TIER, _VEO_ENDPOINTS["fast"])
+
+
+VEO_DURATION   = _opt("VEO_DURATION", "8s")        # длина клипа шота: "8s"/"6s"/"4s"
+VEO_RESOLUTION = _opt("VEO_RESOLUTION", "1080p")   # 720p/1080p (для std/fast цена та же)
+VEO_ASPECT     = _opt("VEO_ASPECT", "9:16")        # вертикаль
+VEO_GENERATE_AUDIO = _flag("VEO_GENERATE_AUDIO", True)   # пусть модель сама говорит
+VEO_SAFETY     = _opt("VEO_SAFETY_TOLERANCE", "4")  # 1 (строго) .. 6 (мягко)
+# Субтитры в Veo-режиме: словных таймкодов нет (нет TTS), поэтому только:
+#   hook — крупный хук-текст первые ~2 c (дефолт);  off — без текста вовсе.
+VEO_CAPTIONS   = _opt("VEO_CAPTIONS", "hook").strip().lower()
+# Подкладывать ли фоновую музыку ПОД нативное аудио (по умолчанию нет — у Veo уже
+# есть собственный эмбиент/речь, музыка чаще мешает).
+VEO_MUSIC_UNDER = _flag("VEO_MUSIC_UNDER", False)
+# В Veo-режиме шотов меньше: каждый — отдельная ~8-сек сцена с речью.
+DEFAULT_SHOTS_VEO = int(_opt("DEFAULT_SHOTS_VEO", "3"))
+
 # ── ELEVENLABS: ПУЛ ГОЛОСОВ / ПРОФИЛИ ПЕРСОНАЖЕЙ ───────────────────────────────
 # Формат «фрукты спорят» живёт за счёт РАЗНЫХ голосов у персонажей. Но если у вас
 # один voice_id — не беда: разводим персонажей по высоте тона (pitch) на ffmpeg,

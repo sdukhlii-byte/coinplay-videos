@@ -227,14 +227,15 @@ def _coerce(data: dict) -> dict:
 
 def write_script(topic: str, language: str, n_shots: int, duration: int,
                  vertical: str = "", fmt: str = "", allow_mascot: bool = True,
-                 retries: int = 3) -> dict:
+                 spoken: bool = False, retries: int = 3) -> dict:
     """
     Генерит сюжетный мультиперсонажный сценарий и нормализует его до валидной схемы.
     `vertical` и `fmt` — необязательные уточнения (вертикаль/формат скита).
+    `spoken=True` — режим Veo (персонажи сами проговаривают реплики).
     """
     user = build_script_user_prompt(
         topic, language, n_shots, duration,
-        vertical=vertical, fmt=fmt, allow_mascot=allow_mascot,
+        vertical=vertical, fmt=fmt, allow_mascot=allow_mascot, spoken=spoken,
     )
     last_err = None
     for attempt in range(1, retries + 1):

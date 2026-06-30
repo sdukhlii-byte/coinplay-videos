@@ -42,6 +42,16 @@ def probe_duration(path: str) -> float:
     return float(json.loads(proc.stdout)["format"]["duration"])
 
 
+def has_audio(path: str) -> bool:
+    """True, если в файле есть хотя бы одна аудиодорожка."""
+    proc = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a",
+         "-show_entries", "stream=index", "-of", "csv=p=0", path],
+        capture_output=True, text=True,
+    )
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
 # ── АУДИО-КИРПИЧИ ──────────────────────────────────────────────────────────────
 
 def make_silence(dst: str, duration: float, sr: int = 44100) -> str:

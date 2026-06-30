@@ -19,9 +19,41 @@ brand/brand_prompts.py — бренд-библиотека и творческо
 
 from __future__ import annotations
 
+import os
+
 # ── ЕДИНЫЙ ВИЗУАЛЬНЫЙ «СКИН» БРЕНДА ─────────────────────────────────────────────
 # Применяется ко ВСЕМ роликам поверх любого каста, чтобы мир выглядел «как Coinplay».
-BRAND_WORLD = (
+# RENDER_STYLE переключает рендер, НЕ трогая брендовые приметы (фиолет/сферы/монеты):
+#   cinematic (дефолт) — полуреалистичный кино-3D, человекоподобные тела, кожа с
+#                        сабсёрфейсом, крупные эмоции (как в Pixar-фичере);
+#   cartoon            — прежний яркий мультяшный стиль.
+_RENDER_STYLE = os.environ.get("RENDER_STYLE", "cinematic").strip().lower()
+
+# Брендовое ОКРУЖЕНИЕ (приметы Coinplay) — общее для обоих стилей, не меняем.
+_BRAND_ENV = (
+    "the Coinplay brand world: deep indigo-to-violet gradient environment, glossy "
+    "volumetric purple spheres floating as signature brand elements, neon magenta and "
+    "electric-blue rim lighting, golden coin particles and subtle crypto glyphs drifting "
+    "in the air"
+)
+
+if _RENDER_STYLE == "cartoon":
+    BRAND_WORLD = (
+        f"vibrant stylized 3D cartoon set in {_BRAND_ENV}, high color saturation, punchy "
+        "contrast, playful energetic mood, cinematic yet cartoonish, smooth global "
+        "illumination, soft depth of field, Pixar-meets-streetwear render quality"
+    )
+else:  # cinematic / realistic (дефолт)
+    BRAND_WORLD = (
+        f"cinematic semi-realistic 3D animation, Disney-Pixar feature-film quality, set in "
+        f"{_BRAND_ENV}; anthropomorphic characters with believable human-like bodies and "
+        "natural proportions, soft subsurface-scattering skin with fine micro-surface "
+        "detail, highly expressive faces capable of subtle nuanced emotion, rich volumetric "
+        "cinematic key lighting, shallow depth of field, high dynamic range, polished "
+        "film-grade render"
+    )
+
+_BRAND_WORLD_LEGACY = (
     "vibrant stylized 3D cartoon in the Coinplay brand world: deep indigo-to-violet "
     "gradient environment, glossy volumetric purple spheres floating as signature brand "
     "elements, neon magenta and electric-blue rim lighting, golden coin particles and "
@@ -32,8 +64,9 @@ BRAND_WORLD = (
 
 # Композиционные требования под вертикаль 9:16 + крупные вшитые субтитры.
 FRAMING_9x16 = (
-    "vertical 9:16 composition, characters framed in the central band, generous empty "
-    "headroom in the top third and bottom third reserved for large subtitle text, "
+    "vertical 9:16 composition; choose shot scale for emotional impact — wide, medium, "
+    "or a BOLD emotional close-up on the face when the moment calls for it; keep the main "
+    "subject clearly framed and leave moderate headroom where subtitle text is expected; "
     "no on-image text, no captions, no watermark, no logo"
 )
 
@@ -112,6 +145,9 @@ def build_character_ref_prompt(member: dict, setting: str = "") -> str:
         f"Full-body character reference sheet of a single character named '{name}'. "
         f"Character design: {design}. "
         f"{BRAND_WORLD}. "
+        "Render as a premium anthropomorphic character with a believable, human-like body, "
+        "natural proportions and posture, and a highly expressive face built for subtle, "
+        "nuanced emotion (lead-character quality, like a Pixar hero). "
         f"Clean dark violet studio background, neutral confident pose, front view, full "
         f"body clearly visible, sharp focus, high detail, no other characters. "
         f"This is a reference sheet used to keep this exact character identical in later scenes."
@@ -159,7 +195,7 @@ def build_keyframe_prompt(shot: dict, cast_by_id: dict, setting: str = "") -> st
         SCENE_MOODS.get(str(shot.get("mood", "")).lower().strip(), ""),
         BRAND_WORLD + ".",
         "Single cinematic keyframe, the characters are the clear foreground subjects, "
-        "expressive cartoon acting. " + FRAMING_9x16 + ".",
+        "film-quality emotional acting with nuanced expressive faces. " + FRAMING_9x16 + ".",
     ]
     return " ".join(p for p in parts if p)
 
@@ -169,12 +205,12 @@ def build_motion_prompt(shot: dict) -> str:
     motion = shot.get("motion", "").strip()
     n = len(shot.get("characters") or [])
     ensemble = (
-        "the characters talk and gesture expressively at each other, big cartoon acting, "
+        "the characters talk and gesture expressively at each other, big nuanced emotional acting, "
         if n >= 2 else
         "the character performs the action expressively, "
     )
     base = (
-        f"Smooth lively cartoon animation: {ensemble}"
+        f"Smooth lively film-quality animation: {ensemble}"
         "subtle camera push-in, floating brand spheres drift gently, golden coin particles "
         "shimmer. Keep every character on-model and stable: no morphing, no extra limbs, "
         "no face distortion."
@@ -209,7 +245,7 @@ def build_veo_prompt(shot: dict, cast_by_id: dict, setting: str = "",
     scene = (
         f"Animate this image. {visual}. {mood} "
         f"{motion + '. ' if motion else ''}"
-        "Smooth lively 3D cartoon animation, expressive faces, big cartoon acting, "
+        "Smooth lively film-quality 3D animation, expressive nuanced faces, big emotional acting, "
         "characters move and emote naturally, subtle cinematic camera. "
         "Keep every character on-model and stable (no morphing, no extra limbs, no face distortion)."
     )

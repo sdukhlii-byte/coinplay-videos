@@ -88,6 +88,12 @@ S3_PUBLIC_BASE     = _opt("S3_PUBLIC_BASE")      # публичный CDN-дом
 
 STORAGE_ENABLED = all([S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET, S3_PUBLIC_BASE])
 
+# Локальный архив готовых роликов на ПЕРСИСТЕНТНОМ томе Railway (напр. /data).
+# Если задан — каждый собранный output.mp4 копируется в <DIR>/<record_id>.mp4
+# ДО доставки, поэтому рендер не теряется даже если Telegram/заливка упали.
+# Это бэкап «не потерять файл», НЕ публичная ссылка (URL у файла на томе нет).
+LOCAL_ARCHIVE_DIR = _opt("LOCAL_ARCHIVE_DIR", "")
+
 # ── AIRTABLE: таблица и поля ───────────────────────────────────────────────────
 AIRTABLE_TABLE     = _opt("AIRTABLE_TABLE_NAME", "Videos")
 

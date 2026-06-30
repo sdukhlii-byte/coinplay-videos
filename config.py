@@ -54,11 +54,25 @@ def _flag(key: str, default: bool = False) -> bool:
     return _opt(key, "1" if default else "0").strip().lower() in ("1", "true", "yes", "on")
 
 
+# ── ПРОВАЙДЕР ГЕНЕРАТИВНОЙ МЕДИА ───────────────────────────────────────────────
+# Картинки (референсы персонажей + кейфреймы) и видео (i2v) можно гнать через
+# fal ИЛИ openrouter — независимо. Свап = одна переменная окружения.
+#   IMAGE_PROVIDER = fal | openrouter   (дефолт fal)
+#   VIDEO_PROVIDER = fal | openrouter   (дефолт fal)
+IMAGE_PROVIDER = _opt("IMAGE_PROVIDER", "fal").strip().lower()
+VIDEO_PROVIDER = _opt("VIDEO_PROVIDER", "fal").strip().lower()
+_USE_FAL = "fal" in (IMAGE_PROVIDER, VIDEO_PROVIDER)
+_USE_OR  = "openrouter" in (IMAGE_PROVIDER, VIDEO_PROVIDER)
+
 # ── СЕКРЕТЫ / КЛЮЧИ ────────────────────────────────────────────────────────────
 AIRTABLE_TOKEN     = _require("AIRTABLE_TOKEN")
 AIRTABLE_BASE_ID   = _require("AIRTABLE_BASE_ID")
 OPENAI_API_KEY     = _require("OPENAI_API_KEY")        # сценарий (вы уже его используете)
-FAL_KEY            = _require("FAL_KEY")               # видео + кадры (Kling/Nano Banana)
+# Ключи провайдеров медиа: требуем только тот, что реально используется.
+FAL_KEY            = _require("FAL_KEY") if _USE_FAL else _opt("FAL_KEY")
+OPENROUTER_API_KEY = _require("OPENROUTER_API_KEY") if _USE_OR else _opt("OPENROUTER_API_KEY")
+OPENROUTER_REFERER = _opt("OPENROUTER_REFERER", "")    # опц. атрибуция приложения
+OPENROUTER_TITLE   = _opt("OPENROUTER_TITLE", "Coinplay")
 ELEVENLABS_API_KEY = _require("ELEVENLABS_API_KEY")    # закадровый голос
 TELEGRAM_TOKEN     = _require("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT      = _require("TELEGRAM_CHAT_ID")
@@ -116,6 +130,17 @@ MODELS = {
     # «Геройский» роут для финалов (опц., дороже). Veo 3.1.
     "image_to_video_hero": _opt("FAL_I2V_HERO_MODEL", "fal-ai/veo3.1/image-to-video"),
 }
+
+# ── ЭНДПОИНТЫ МОДЕЛЕЙ (OpenRouter) ─────────────────────────────────────────────
+# Слаги сверять с актуальным каталогом:
+#   картинки → https://openrouter.ai/api/v1/images/models
+#   видео    → https://openrouter.ai/api/v1/videos/models
+# Картинка одна на оба этапа (референс + кейфрейм через input_references).
+OR_IMAGE_MODEL      = _opt("OR_IMAGE_MODEL", "google/gemini-2.5-flash-image")
+OR_IMAGE_RESOLUTION = _opt("OR_IMAGE_RESOLUTION", "")   # "1K"/"2K"/"" (провайдер сам)
+# Видео: veo-режим и kling-режим — разные слаги.
+OR_VIDEO_MODEL_VEO  = _opt("OR_VIDEO_MODEL_VEO", "google/veo-3.1")
+OR_VIDEO_MODEL_I2V  = _opt("OR_VIDEO_MODEL_I2V", "kwaivgi/kling-v3.0-std")
 
 # Какие длительности клипов поддерживает i2v-модель (для квантизации длины шота).
 # Kling обычно 5 / 10 сек. Подгоняем под ближайшую сверху, затем триммим в ffmpeg.

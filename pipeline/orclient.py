@@ -46,6 +46,14 @@ class ORLocked(RuntimeError):
     """Аккаунт/ключ заблокирован или кончились средства — ретраить бессмысленно."""
 
 
+class ORBlocked(RuntimeError):
+    """
+    Запрос отклонён КОНТЕНТ-фильтром модели (Gemini safety / IMAGE_PROHIBITED_CONTENT).
+    Ретраить ТЕМ ЖЕ промптом бессмысленно — вызывающий код должен попробовать другой
+    (зачищенный) промпт или другую модель. Терминально для данной попытки.
+    """
+
+
 def _raise_for_response(r: requests.Response, what: str) -> None:
     if r.ok:
         return
@@ -54,6 +62,10 @@ def _raise_for_response(r: requests.Response, what: str) -> None:
     low = body.lower()
     if r.status_code == 402 or "insufficient" in low or "exhausted" in low or "is locked" in low:
         raise ORLocked(f"OpenRouter {what} HTTP {r.status_code}: {body}")
+    # Контент-блок модели (safety). Не ретраим — пусть caller сменит промпт/модель.
+    if any(s in low for s in ("prohibited_content", "prohibited", "blocked", "safety",
+                              "content policy", "flagged")):
+        raise ORBlocked(f"OpenRouter {what} HTTP {r.status_code}: {body}")
     raise RuntimeError(f"OpenRouter {what} HTTP {r.status_code}: {body}")
 
 
@@ -94,6 +106,8 @@ def generate_image_bytes(prompt: str, ref_urls: list[str] | None = None,
             return base64.b64decode(data[0]["b64_json"])
         except ORLocked:
             raise  # не ретраим терминальные
+        except ORBlocked:
+            raise  # контент-блок: ретрай тем же промптом не поможет — наверх
         except (requests.RequestException, RuntimeError) as e:
             last_err = e
             if attempt < retries:

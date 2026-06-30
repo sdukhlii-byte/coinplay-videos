@@ -27,6 +27,7 @@ except Exception:                            # noqa: BLE001
 from brand.brand_prompts import (
     build_character_ref_prompt, build_mascot_ref_prompt,
     build_keyframe_prompt, build_motion_prompt, MASCOT_ID,
+    IMAGE_SAFETY_CLAUSE,
 )
 
 log = logging.getLogger("visuals")
@@ -141,49 +142,88 @@ def generate_cast(workdir: str, cast: list[dict], setting: str = "",
 
 # ── КЕЙФРЕЙМ ШОТА (мультиреференс) ─────────────────────────────────────────────
 
+def _keyframe_primary(prompt: str, image_urls: list[str], path: str, idx: int) -> str:
+    """Одна попытка кейфрейма на ОСНОВНОМ провайдере (с референсами персонажей)."""
+    if C.IMAGE_PROVIDER == "openrouter":
+        if orclient is None:
+            raise RuntimeError("IMAGE_PROVIDER=openrouter, но pipeline.orclient не импортировался")
+        data = orclient.generate_image_bytes(
+            prompt, ref_urls=image_urls or None, aspect_ratio="9:16", label=f"kf{idx}")
+        _save(data, path)
+        return _data_uri(path)
+    if image_urls:
+        payload = {"prompt": prompt, "image_urls": image_urls,   # мульти-референс (edit)
+                   "aspect_ratio": "9:16", "num_images": 1}
+        model = C.MODELS["keyframe_image"]
+    else:
+        payload = {"prompt": prompt, "aspect_ratio": "9:16", "num_images": 1}
+        model = C.MODELS["character_image"]
+    res = falclient.run(model, payload, timeout=180, label=f"kf{idx}")
+    url = falclient.first_image_url(res)
+    _download(url, path)
+    return url
+
+
+def _keyframe_flux_fallback(prompt: str, path: str, idx: int) -> str:
+    """
+    Перестраховочный t2i на ПЕРМИССИВНОЙ модели (Flux на fal). Без референсов —
+    персонажи могут не совпасть на 100%, НО шот отрисуется и ролик не упадёт.
+    Flux на fal принимает image_size (НЕ aspect_ratio), поэтому payload другой.
+    Нужен FAL_KEY.
+    """
+    payload = {"prompt": prompt, "image_size": "portrait_16_9", "num_images": 1}
+    res = falclient.run(C.FAL_FALLBACK_IMAGE_MODEL, payload, timeout=180, label=f"kf{idx}-flux")
+    url = falclient.first_image_url(res)
+    _download(url, path)
+    return url
+
+
 def generate_keyframe(workdir: str, idx: int, shot: dict,
                       cast_refs: dict[str, dict], cast_by_id: dict[str, dict],
                       setting: str = "") -> tuple[str, str]:
     """
-    Кейфрейм шота. В edit-модель передаём референсы ВСЕХ персонажей, которые в шоте,
-    чтобы они вышли on-model и в одной сцене.
+    Кейфрейм шота. В edit-модель передаём референсы ВСЕХ персонажей шота, чтобы они
+    вышли on-model и в одной сцене.
+
+    Главная причина прежних падений: image-модель (Gemini/Nano Banana) режет кадр как
+    IMAGE_PROHIBITED_CONTENT и роняет ВЕСЬ ролик. Теперь — цепочка попыток, чтобы один
+    заблокированный кадр не убивал запись:
+      1) основная модель, зачищенный промпт (санитайзер уже в build_keyframe_prompt);
+      2) она же + явная «чистая» оговорка (fully clothed / non-sexual / no gore)
+         — рефы и консистентность персонажей СОХРАНЯЮТСЯ;
+      3) пермиссивный Flux (t2i, без рефов) — последний шанс отрисовать шот.
     """
     present = [c for c in (shot.get("characters") or list(cast_by_id.keys()))
                if c in cast_refs]
     image_urls = [cast_refs[c]["url"] for c in present]
-    prompt = build_keyframe_prompt(shot, cast_by_id, setting)
-
+    base_prompt = build_keyframe_prompt(shot, cast_by_id, setting)
     path = os.path.join(workdir, f"keyframe_{idx:02d}.png")
 
-    if C.IMAGE_PROVIDER == "openrouter":
-        if orclient is None:
-            raise RuntimeError("IMAGE_PROVIDER=openrouter, но pipeline.orclient не импортировался")
-        # Мульти-референс: персонажи шота передаются как input_references.
-        data = orclient.generate_image_bytes(
-            prompt, ref_urls=image_urls or None, aspect_ratio="9:16", label=f"kf{idx}")
-        _save(data, path)
-        url = _data_uri(path)
-        log.info("Keyframe %d ready (%d refs, openrouter): %s", idx, len(image_urls), path)
-        return url, path
+    # (label, prompt, use_flux)
+    attempts: list[tuple[str, str, bool]] = [
+        ("primary",      base_prompt, False),
+        ("primary+safe", base_prompt + IMAGE_SAFETY_CLAUSE, False),
+    ]
+    if getattr(C, "IMAGE_FALLBACK_ENABLED", False):
+        attempts.append(("flux-fallback", base_prompt + IMAGE_SAFETY_CLAUSE, True))
 
-    if image_urls:
-        payload = {
-            "prompt": prompt,
-            "image_urls": image_urls,     # мульти-референс (edit-режим Nano Banana Pro)
-            "aspect_ratio": "9:16",
-            "num_images": 1,
-        }
-        model = C.MODELS["keyframe_image"]
-    else:
-        # нет персонажей (вырожденный случай / legacy) → чистый text-to-image
-        payload = {"prompt": prompt, "aspect_ratio": "9:16", "num_images": 1}
-        model = C.MODELS["character_image"]
+    last_err: Exception | None = None
+    for label, prompt, use_flux in attempts:
+        try:
+            if use_flux:
+                url = _keyframe_flux_fallback(prompt, path, idx)
+                log.info("Keyframe %d ready via FLUX fallback (no refs): %s", idx, path)
+            else:
+                url = _keyframe_primary(prompt, image_urls, path, idx)
+                log.info("Keyframe %d ready (%d refs, %s): %s",
+                         idx, len(image_urls), label, path)
+            return url, path
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+            log.warning("Keyframe %d attempt '%s' failed (%s)", idx, label, str(e)[:140])
+            continue
 
-    res = falclient.run(model, payload, timeout=180, label=f"kf{idx}")
-    url = falclient.first_image_url(res)
-    _download(url, path)
-    log.info("Keyframe %d ready (%d refs): %s", idx, len(image_urls), path)
-    return url, path
+    raise RuntimeError(f"Keyframe {idx} failed all fallback attempts: {last_err}")
 
 
 # ── АНИМАЦИЯ ШОТА (image-to-video) ─────────────────────────────────────────────

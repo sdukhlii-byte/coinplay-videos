@@ -189,6 +189,16 @@ SECONDARY_SAFETY_CHECKER = _flag("SECONDARY_SAFETY_CHECKER", False)
 # тихий Ken Burns как раньше. Требует ELEVENLABS_* (они и так required в конфиге).
 KENBURNS_TTS = _flag("KENBURNS_TTS", True)
 
+# ── ФОЛБЭК КАРТИНКИ (кейфрейм заблокирован контент-фильтром) ───────────────────
+# Главный гейткипер — НЕ Veo, а image-модель (Gemini/Nano Banana режет кейфрейм как
+# IMAGE_PROHIBITED_CONTENT → раньше падал весь ролик). Цепочка кейфрейма теперь:
+#   1) основная модель с зачищенным промптом;
+#   2) она же + явная «чистая» оговорка (fully clothed / non-sexual / no gore);
+#   3) пермиссивная t2i-модель (Flux на fal) — без референсов, но шот ОТРИСУЕТСЯ
+#      и ролик не упадёт. Нужен FAL_KEY.
+IMAGE_FALLBACK_ENABLED   = _flag("IMAGE_FALLBACK_ENABLED", True)
+FAL_FALLBACK_IMAGE_MODEL = _opt("FAL_FALLBACK_IMAGE_MODEL", "fal-ai/flux/dev")
+
 # ── ВИДЕО-ДВИЖОК ───────────────────────────────────────────────────────────────
 # VIDEO_ENGINE=veo   — Veo 3.1 image-to-video с НАТИВНЫМ аудио: персонажи сами
 #                      говорят свои реплики с липсинком (+эмбиент). ElevenLabs не
@@ -222,9 +232,10 @@ VEO_RESOLUTION = _opt("VEO_RESOLUTION", "1080p")   # 720p/1080p (для std/fast
 VEO_ASPECT     = _opt("VEO_ASPECT", "9:16")        # вертикаль
 VEO_GENERATE_AUDIO = _flag("VEO_GENERATE_AUDIO", True)   # пусть модель сама говорит
 VEO_SAFETY     = _opt("VEO_SAFETY_TOLERANCE", "4")  # 1 (строго) .. 6 (мягко)
-# Субтитры в Veo-режиме: словных таймкодов нет (нет TTS), поэтому только:
-#   hook — крупный хук-текст первые ~2 c (дефолт);  off — без текста вовсе.
-VEO_CAPTIONS   = _opt("VEO_CAPTIONS", "hook").strip().lower()
+# Субтитры в Veo-режиме: словных таймкодов нет (нет TTS). Дефолт — БЕЗ текста вовсе:
+# чистая картинка Veo «дороже» и вируснее, чем хук, налепленный поверх кадра.
+#   off  — без текста на видео (дефолт);  hook — крупный хук-текст первые ~2 c.
+VEO_CAPTIONS   = _opt("VEO_CAPTIONS", "off").strip().lower()
 # Подкладывать ли фоновую музыку ПОД нативное аудио (по умолчанию нет — у Veo уже
 # есть собственный эмбиент/речь, музыка чаще мешает).
 VEO_MUSIC_UNDER = _flag("VEO_MUSIC_UNDER", False)

@@ -20,6 +20,7 @@ brand/brand_prompts.py — бренд-библиотека и творческо
 from __future__ import annotations
 
 import os
+import re
 
 # ── ЕДИНЫЙ ВИЗУАЛЬНЫЙ «СКИН» БРЕНДА ─────────────────────────────────────────────
 # Применяется ко ВСЕМ роликам поверх любого каста, чтобы мир выглядел «как Coinplay».
@@ -30,8 +31,11 @@ import os
 _RENDER_STYLE = os.environ.get("RENDER_STYLE", "cinematic").strip().lower()
 
 # Брендовое ОКРУЖЕНИЕ (приметы Coinplay) — общее для обоих стилей, не меняем.
+# ВАЖНО: НЕ упоминаем здесь само слово-бренд — image-модель честно рисует его как
+# надпись в небе/на вывесках. Бренд держим в РЕЧИ, энд-карте, лого-оверлее и
+# эмблеме маскота — НЕ в промпте картинки. Идентичность держат фиолет/сферы/монеты.
 _BRAND_ENV = (
-    "the Coinplay brand world: deep indigo-to-violet gradient environment, glossy "
+    "a premium neon crypto-casino world: deep indigo-to-violet gradient environment, glossy "
     "volumetric purple spheres floating as signature brand elements, neon magenta and "
     "electric-blue rim lighting, golden coin particles and subtle crypto glyphs drifting "
     "in the air"
@@ -62,35 +66,38 @@ _BRAND_WORLD_LEGACY = (
     "soft depth of field, Pixar-meets-streetwear render quality"
 )
 
-# Композиционные требования под вертикаль 9:16 + крупные вшитые субтитры.
+# Композиционные требования под вертикаль 9:16. Жёсткий запрет любого текста —
+# никаких надписей, вывесок, логотипов, цифр (их рисует image-модель и это палево).
 FRAMING_9x16 = (
     "vertical 9:16 composition; choose shot scale for emotional impact — wide, medium, "
     "or a BOLD emotional close-up on the face when the moment calls for it; keep the main "
-    "subject clearly framed and leave moderate headroom where subtitle text is expected; "
-    "no on-image text, no captions, no watermark, no logo"
+    "subject clearly framed. ABSOLUTELY NO text of any kind in the image: no words, no "
+    "letters, no numbers, no captions, no signage, no shop/neon text, no logos, no "
+    "watermarks, no UI — clean textless frame"
 )
 
 # ── ФИРМЕННЫЙ МАСКОТ (опциональное камео в финале) ─────────────────────────────
 # Появляется только если включён BRAND_MASCOT_CAMEO — чтобы нативно подать бренд.
 MASCOT_BIBLE = (
-    "the Coinplay mascot: a sly, confident anthropomorphic fox-like crypto host with "
-    "glowing violet eyes, wearing a sleek dark hoodie with a subtle neon-violet Coinplay "
-    "'C' emblem, a thin gold chain and oversized headphones around the neck; stylized 3D "
+    "a sly, confident anthropomorphic fox-like crypto host with "
+    "glowing violet eyes, wearing a sleek dark hoodie with a subtle glowing violet 'C' "
+    "crest emblem, a thin gold chain and oversized headphones around the neck; stylized 3D "
     "cartoon, exaggerated expressive face, big readable eyes, clean bold shapes"
 )
 MASCOT_ID = "coinplay_host"
 
 # ── НАСТРОЕНИЯ СЦЕНЫ ───────────────────────────────────────────────────────────
 SCENE_MOODS = {
-    "win":     "explosive jackpot celebration, golden coins raining, confetti, triumphant energy",
-    "hype":    "fast hype energy, a character pointing at the viewer, dynamic action lines",
-    "lucky":   "slot / roulette spinning, suspense, sparkles, lucky-charm vibe",
-    "crypto":  "glowing crypto charts going up, bitcoin and ethereum coins orbiting the scene",
-    "vs":      "two characters facing off, duel energy, dramatic stadium lights, tension",
-    "argue":   "characters loudly arguing, leaning in, exaggerated angry-funny faces, sweat drops",
-    "smug":    "one character calm and smug while another panics, contrast of confidence",
-    "shock":   "characters in comedic shock, jaws dropping, big surprised eyes, motion lines",
-    "reveal":  "a character pulling back to reveal a giant glowing number or screen",
+    "win":     "explosive jackpot celebration, golden coins erupting everywhere, confetti cannons, screen shaking with triumphant energy",
+    "hype":    "frenetic hype energy, a character lunging at the viewer, speed lines, things flying around the frame",
+    "lucky":   "slot / roulette spinning at insane speed, slamming to a stop, sparks and sparkles bursting, lucky-charm chaos",
+    "crypto":  "glowing crypto charts rocketing upward, bitcoin and ethereum coins whirling around the scene, numbers exploding",
+    "vs":      "two characters slamming into a face-off, duel energy, dramatic stadium lights snapping on, electric tension",
+    "argue":   "characters loudly screaming in each other's faces, leaning in, exaggerated bug-eyed angry-funny expressions, veins and sweat drops popping",
+    "smug":    "one character ice-cold and smug while another completely loses it and flails, sharp contrast of confidence vs panic",
+    "shock":   "characters in comedic full-body shock, jaws hitting the floor, eyes bulging out cartoon-style, motion lines and freeze-frame",
+    "reveal":  "a character whipping around to reveal a giant glowing screen, dramatic light blast, everyone's heads snapping toward it",
+    "chaos":   "total slapstick mayhem, things crashing and flying, a gremlin-energy troublemaker wreaking havoc, everyone reacting big",
 }
 
 # ── БИБЛИОТЕКА ФОРМАТОВ СКИТОВ ──────────────────────────────────────────────────
@@ -123,6 +130,16 @@ FORMATS = {
         "energy escalating to absurd levels.",
     "animals-meeting":
         "animals in a tiny corporate meeting room arguing over a plan on a whiteboard.",
+    "menace-pet":
+        "a small unhinged gremlin-energy animal (e.g. a chaotic ginger cat or feral little "
+        "creature) with huge expressive eyes who keeps causing escalating slapstick havoc — "
+        "knocking things over, body-slamming objects, sprinting through the scene — while a "
+        "deadpan owner or rival reacts; cartoonish, bloodless, Tom-&-Jerry / Looney-Tunes "
+        "level mayhem played purely for laughs, building to a sudden satisfying payoff.",
+    "chaos-spiral":
+        "one tiny problem instantly snowballs into absurd over-the-top disaster as a "
+        "hyperactive troublemaker character makes every beat worse — fast, escalating, "
+        "physical comedy with big reactions and a hard comedic button at the end.",
 }
 
 DEFAULT_FORMAT_HINT = (
@@ -133,6 +150,50 @@ DEFAULT_FORMAT_HINT = (
 
 # ── ПРОМТЫ КАРТИНОК ─────────────────────────────────────────────────────────────
 
+# Санитайзер: Gemini/Nano-Banana режут антропоморфную «романтику»/интимность как
+# IMAGE_PROHIBITED_CONTENT даже в безобидной рекламной мелодраме. Нейтрализуем
+# рискованные формулировки в visual/motion/design — делаем сцену ЯВНО несексуальной
+# (это снижает ЛОЖНЫЕ блоки, а не добавляет «взрослый» контент).
+_RISKY_SUBS = [
+    (r"\bpull(?:s|ed|ing)?\s+(?:her|him|them)\s+(?:in\s+)?close\b", "stands close to"),
+    (r"\b(?:faces?|lips?)\s+(?:are\s+)?(?:just\s+)?inches?\s+apart\b", "faces near each other"),
+    (r"\binches?\s+apart\b", "near each other"),
+    (r"\bbreath\s+(?:catch|hitch)\w*\b", "a surprised expression"),
+    (r"\b(?:passionate(?:ly)?\s+)?kiss\w*\b", "dramatic moment"),
+    (r"\bembrac\w+\b", "stands with"),
+    (r"\bcaress\w*\b", "gestures toward"),
+    (r"\b(?:sensual|seductive|sultry|steamy|erotic)\b", "dramatic"),
+    (r"\bintimate(?:ly)?\b", "tense dramatic"),
+    (r"\blingerie\b", "outfit"),
+    (r"\bcleavage\b", ""),
+    (r"\bbare\s+(?:chest|skin|shoulders?|back)\b", "outfit"),
+    (r"\b(?:nude|naked|topless)\b", "fully clothed"),
+    # каскад жести для chaos-формата (Veo/Gemini блокируют реалистичную кровь):
+    (r"\bblood(?:y|ied)?\b", ""),
+    (r"\bgore\b", ""),
+    (r"\bgory\b", "cartoonish"),
+    (r"\bgraphic\s+violence\b", "slapstick"),
+]
+
+
+def sanitize_scene_text(text: str) -> str:
+    """Нейтрализует формулировки, на которые срабатывает image-safety-фильтр."""
+    if not text:
+        return text
+    out = text
+    for pat, repl in _RISKY_SUBS:
+        out = re.sub(pat, repl, out, flags=re.IGNORECASE)
+    return re.sub(r"\s{2,}", " ", out).strip()
+
+
+# Позитивная «чистая» оговорка — добавляется при РЕТРАЕ заблокированного кейфрейма
+# (а также в финальном flux-фолбэке), чтобы явно увести модель от запрещёнки.
+IMAGE_SAFETY_CLAUSE = (
+    " All characters are fully clothed and non-sexual; wholesome, brand-safe advertising "
+    "image; no nudity, no sexual or suggestive content, no gore."
+)
+
+
 def build_character_ref_prompt(member: dict, setting: str = "") -> str:
     """
     Промт для ОДНОГО референс-листа персонажа (генерится 1 раз на персонажа).
@@ -140,7 +201,7 @@ def build_character_ref_prompt(member: dict, setting: str = "") -> str:
     переносить персонажа в кейфреймы через мульти-референс.
     """
     name = member.get("name") or member.get("id", "character")
-    design = member.get("design", "").strip()
+    design = sanitize_scene_text(member.get("design", "").strip())
     return (
         f"Full-body character reference sheet of a single character named '{name}'. "
         f"Character design: {design}. "
@@ -176,7 +237,8 @@ def build_keyframe_prompt(shot: dict, cast_by_id: dict, setting: str = "") -> st
 
     if present:
         roster = "; ".join(
-            f"{m.get('name') or m.get('id')} ({m.get('design','').strip()})" for m in present
+            f"{m.get('name') or m.get('id')} ({sanitize_scene_text(m.get('design','').strip())})"
+            for m in present
         )
         keep = (
             "Use the provided reference images. Keep EACH of these characters exactly "
@@ -190,7 +252,7 @@ def build_keyframe_prompt(shot: dict, cast_by_id: dict, setting: str = "") -> st
 
     parts = [
         keep,
-        f"Scene: {shot.get('visual','').strip()}.",
+        f"Scene: {sanitize_scene_text(shot.get('visual','').strip())}.",
         (f"Setting: {setting.strip()}." if setting else ""),
         SCENE_MOODS.get(str(shot.get("mood", "")).lower().strip(), ""),
         BRAND_WORLD + ".",
@@ -202,18 +264,21 @@ def build_keyframe_prompt(shot: dict, cast_by_id: dict, setting: str = "") -> st
 
 def build_motion_prompt(shot: dict) -> str:
     """Промт движения для image-to-video (что оживляем в кадре)."""
-    motion = shot.get("motion", "").strip()
+    motion = sanitize_scene_text(shot.get("motion", "").strip())
     n = len(shot.get("characters") or [])
     ensemble = (
-        "the characters talk and gesture expressively at each other, big nuanced emotional acting, "
+        "the characters explode into expressive physical comedy, big gestures and exaggerated "
+        "reactions at each other, "
         if n >= 2 else
-        "the character performs the action expressively, "
+        "the character bursts into expressive over-the-top physical action, "
     )
     base = (
-        f"Smooth lively film-quality animation: {ensemble}"
-        "subtle camera push-in, floating brand spheres drift gently, golden coin particles "
-        "shimmer. Keep every character on-model and stable: no morphing, no extra limbs, "
-        "no face distortion."
+        f"High-energy viral cartoon animation: {ensemble}"
+        "exaggerated squash-and-stretch cartoon physics, snappy comedic timing, dynamic camera "
+        "with quick push-ins and a touch of screen-shake on impacts, floating brand spheres drift, "
+        "golden coin particles shimmer. Cartoonish bloodless slapstick only — never graphic. "
+        "Keep every character on-model and stable: no morphing, no extra limbs, no face distortion. "
+        "No on-screen text, letters, captions, logos or watermarks."
     )
     return f"{motion}. {base}" if motion else base
 
@@ -237,17 +302,32 @@ def build_veo_prompt(shot: dict, cast_by_id: dict, setting: str = "",
 
     Реплики — на языке ролика; модель сама озвучит нужный голос на персонажа.
     """
-    motion = shot.get("motion", "").strip()
-    visual = shot.get("visual", "").strip()
+    motion = sanitize_scene_text(shot.get("motion", "").strip())
+    visual = sanitize_scene_text(shot.get("visual", "").strip())
     mood = SCENE_MOODS.get(str(shot.get("mood", "")).lower().strip(), "")
     lang_name = _VEO_LANG_NAMES.get(language.lower(), language)
 
     scene = (
-        f"Animate this image. {visual}. {mood} "
+        f"Animate this image into a high-energy viral vertical TikTok cartoon. {visual}. {mood} "
         f"{motion + '. ' if motion else ''}"
-        "Smooth lively film-quality 3D animation, expressive nuanced faces, big emotional acting, "
-        "characters move and emote naturally, subtle cinematic camera. "
-        "Keep every character on-model and stable (no morphing, no extra limbs, no face distortion)."
+        "STYLE: hyper-dynamic 'brainrot' cartoon energy — exaggerated squash-and-stretch "
+        "cartoon physics, snappy comedic timing, explosive over-the-top facial expressions and "
+        "full-body reactions, fast but readable action with strong anticipation and a satisfying "
+        "payoff beat. Characters MOVE A LOT: big gestures, quick poses, physical comedy, nothing "
+        "stands around stiff. "
+        "SLAPSTICK: chaotic mayhem played purely for laughs — cartoonish and bloodless, "
+        "Looney-Tunes / Tom-&-Jerry level (objects flying, comedic crashes, dramatic pratfalls); "
+        "never graphic, gory, or realistic violence. "
+        "CAMERA: bold dynamic cinematography — whip-pans, quick push-ins, snap-zoom on reactions, "
+        "subtle handheld energy and screen-shake on impacts; keep it vertical 9:16. "
+        "SOUND DESIGN (use native audio fully): punchy synced comedic SFX and foley on every "
+        "action — whooshes, boings, thuds, cartoon impacts, coin jingles, a record-scratch on the "
+        "twist and a satisfying bass-drop sting on the payoff — plus lively ambient and a short "
+        "energetic upbeat music bed under it all. "
+        "RENDER: keep every character perfectly on-model and stable (same face, colors, shapes; "
+        "no morphing, no extra limbs, no face distortion). "
+        "ABSOLUTELY NO on-screen text, letters, words, numbers, captions, signage, neon text, "
+        "logos, UI or watermarks anywhere in the video — clean textless footage."
     )
 
     dialogue = [d for d in (shot.get("dialogue") or []) if str(d.get("line", "")).strip()]
@@ -290,6 +370,12 @@ Your job: turn a VERTICAL/brief into a complete, self-contained mini-story with 
 4) BRAND PAYOFF — Coinplay resolves the story NATIVELY (the smug winner reveals they used Coinplay, or it's the punchline of the argument). Earned by the story, never a billboard.
 5) Optional tiny CTA at the very end (one short line).
 
+=== VIRAL ENERGY (make it rip on TikTok) ===
+- Think unhinged, fast, chaotic "brainrot" energy — like the viral cartoons of a feral ginger cat causing absolute mayhem. Every shot should have MOVEMENT and a strong reason to keep watching.
+- A great engine: one chaotic gremlin-energy protagonist (e.g. a menace ginger cat / feral little creature with huge expressive eyes) who keeps escalating the havoc, plus a deadpan victim/rival who reacts big. Mayhem snowballs, then Coinplay lands the payoff.
+- Keep slapstick CARTOONISH and BLOODLESS (Tom-&-Jerry / Looney-Tunes level: objects flying, comedic crashes, dramatic pratfalls). Never graphic, gory, or realistic — it must read as funny, and it also has to pass the video model's safety filter.
+- Lead with the wildest moment in shot 1 (first 0.5s), escalate hard each shot, land a sudden satisfying button at the end.
+
 === NATIVE BRAND INTEGRATION (most important) ===
 - Coinplay must feel like part of the world or the funny resolution — NOT an ad interrupting the skit.
 - Good: two fruits argue who wins the match; the calm one says "relax, I already cashed out on Coinplay." Bad: a shot that just yells "CLAIM YOUR BONUS NOW."
@@ -306,8 +392,8 @@ Your job: turn a VERTICAL/brief into a complete, self-contained mini-story with 
 - 4 to 6 shots, each ~3-4 seconds.
 - For each shot:
   • characters: array of cast ids visible in this shot (a subset of the cast).
-  • visual: vivid ENGLISH description of the scene/composition (what we SEE). No on-image text.
-  • motion: short ENGLISH description of the action + camera for animating the frame.
+  • visual: vivid ENGLISH description of the scene/composition (what we SEE). NO on-image text of any kind — do NOT describe signs, neon words, billboards, logos, screens with words, or the brand name written anywhere in the frame (the brand lives in the SPOKEN lines, never as rendered text). Do not put the literal word "Coinplay" into visual or setting.
+  • motion: short ENGLISH description of the PHYSICAL action + camera move for animating the frame. Be specific and energetic (who does what, how the camera moves, what flies/crashes). Include 1-2 synced sound cues in words (e.g. "loud crash", "record-scratch", "coin jingle") — the video model renders native audio from this.
   • dialogue: ordered array of spoken lines [{speaker, line}] where speaker is a cast id (or "narrator"). 1-2 short lines per shot, each max ~12 words, punchy, natural for TTS, in the TARGET LANGUAGE.
   • mood: one of [win, hype, lucky, crypto, vs, argue, smug, shock, reveal].
 - A shot may have empty dialogue [] for a silent comedic beat (use sparingly, great before a punchline).
@@ -341,7 +427,7 @@ EXAMPLE A — format "fruit-argument", vertical "crypto casino", language Englis
   "title": "fruit jackpot beef",
   "concept": "Two fruits fight over who is luckier until a smug grape reveals the real edge.",
   "format": "fruit-argument",
-  "setting": "a glossy kitchen counter inside the neon Coinplay brand world, fridge glowing violet behind",
+  "setting": "a glossy kitchen counter inside a neon violet crypto world, fridge glowing violet behind",
   "cast": [
     {"id":"orange","name":"Orange","design":"a round bright-orange orange with a cocky cartoon face, thin arms, tiny sunglasses","personality":"loud","voice":1},
     {"id":"lemon","name":"Lemon","design":"a sour yellow lemon with a permanently annoyed squinting face and little fists","personality":"sour","voice":2},
@@ -363,7 +449,7 @@ EXAMPLE B — format "sports-commentary", vertical "World Cup betting", language
   "title": "two birds call the match",
   "concept": "Two parrot commentators hype a match and reveal where the real action is.",
   "format": "sports-commentary",
-  "setting": "a tiny neon commentary booth overlooking a glowing stadium in the Coinplay world",
+  "setting": "a tiny neon commentary booth overlooking a glowing stadium in a neon violet crypto world",
   "cast": [
     {"id":"blue","name":"Blue","design":"an excitable blue parrot in a tiny headset, feathers spiking up","personality":"hyper","voice":1},
     {"id":"red","name":"Red","design":"a chill red parrot with sunglasses and a tiny scarf, leaning back","personality":"chill","voice":2}

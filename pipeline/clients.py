@@ -52,19 +52,23 @@ def update_record(record_id: str, fields: dict, retries: int = 3):
     log.error(f"update_record failed for {record_id}")
 
 
-# ── S3 / R2 ────────────────────────────────────────────────────────────────────
+# ── S3 / R2 (опционально) ──────────────────────────────────────────────────────
 
-_s3 = boto3.client(
-    "s3",
-    endpoint_url=C.S3_ENDPOINT_URL,
-    aws_access_key_id=C.S3_ACCESS_KEY,
-    aws_secret_access_key=C.S3_SECRET_KEY,
-    config=BotoConfig(signature_version="s3v4", retries={"max_attempts": 3, "mode": "standard"}),
-)
+_s3 = None
+if C.STORAGE_ENABLED:
+    _s3 = boto3.client(
+        "s3",
+        endpoint_url=C.S3_ENDPOINT_URL,
+        aws_access_key_id=C.S3_ACCESS_KEY,
+        aws_secret_access_key=C.S3_SECRET_KEY,
+        config=BotoConfig(signature_version="s3v4", retries={"max_attempts": 3, "mode": "standard"}),
+    )
 
 
 def upload_video(path: str, key: str) -> str:
     """Заливает файл в бакет, возвращает публичный URL через CDN-домен."""
+    if not C.STORAGE_ENABLED:
+        raise RuntimeError("Storage disabled (S3_* env vars not set)")
     ctype = mimetypes.guess_type(path)[0] or "video/mp4"
     _s3.upload_file(
         path, C.S3_BUCKET, key,

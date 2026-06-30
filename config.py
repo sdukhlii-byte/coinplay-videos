@@ -45,12 +45,16 @@ TELEGRAM_TOKEN     = _require("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT      = _require("TELEGRAM_CHAT_ID")
 
 # Хранилище видео — S3-совместимое (Cloudflare R2 / Backblaze B2 / AWS S3).
-# imgbb из баннеров не годится: видео тяжёлые, нужен нормальный объектный сторадж.
-S3_ENDPOINT_URL    = _require("S3_ENDPOINT_URL")       # напр. https://<acct>.r2.cloudflarestorage.com
-S3_ACCESS_KEY      = _require("S3_ACCESS_KEY")
-S3_SECRET_KEY      = _require("S3_SECRET_KEY")
-S3_BUCKET          = _require("S3_BUCKET")
-S3_PUBLIC_BASE     = _require("S3_PUBLIC_BASE")        # публичный CDN-домен бакета, напр. https://cdn.coinplay.media
+# ОПЦИОНАЛЬНО: если переменные не заданы, заливка пропускается, ролик уходит
+# только в Telegram файлом (поле Video_URL в Airtable остаётся пустым).
+# Для прод-хостинга ссылок задайте все пять.
+S3_ENDPOINT_URL    = _opt("S3_ENDPOINT_URL")    # напр. https://<acct>.r2.cloudflarestorage.com
+S3_ACCESS_KEY      = _opt("S3_ACCESS_KEY")
+S3_SECRET_KEY      = _opt("S3_SECRET_KEY")
+S3_BUCKET          = _opt("S3_BUCKET")
+S3_PUBLIC_BASE     = _opt("S3_PUBLIC_BASE")      # публичный CDN-домен бакета
+
+STORAGE_ENABLED = all([S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET, S3_PUBLIC_BASE])
 
 # ── AIRTABLE: таблица и поля ───────────────────────────────────────────────────
 AIRTABLE_TABLE     = _opt("AIRTABLE_TABLE_NAME", "Videos")

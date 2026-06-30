@@ -107,17 +107,27 @@ def process_record(record: dict):
             out_path=out_path,
         )
 
-        # 8) Заливка + Telegram + Airtable
-        key = f"videos/{rid}_{int(time.time())}.mp4"
-        video_url = clients.upload_video(out_path, key)
-        caption = f"🎬 *{script.get('title', topic)}*\nTopic: {topic}\nLang: {language}\n{video_url}"
+        # 8) Заливка (если включена) + Telegram + Airtable
+        if C.STORAGE_ENABLED:
+            key = f"videos/{rid}_{int(time.time())}.mp4"
+            video_url = clients.upload_video(out_path, key)
+            link_line = f"\n{video_url}"
+        else:
+            video_url = ""
+            link_line = ""
+            log.info("Storage disabled — отправляю только в Telegram, Video_URL пустой.")
+
+        caption = f"🎬 *{script.get('title', topic)}*\nTopic: {topic}\nLang: {language}{link_line}"
         clients.send_telegram_video(out_path, caption)
-        clients.update_record(rid, {
+
+        done_fields = {
             C.F_STATUS: C.S_DONE,
-            C.F_VIDEO_URL: video_url,
             C.F_SCRIPT: json.dumps(script, ensure_ascii=False)[:90000],
-        })
-        log.info(f"Done {rid} → {video_url}")
+        }
+        if video_url:
+            done_fields[C.F_VIDEO_URL] = video_url
+        clients.update_record(rid, done_fields)
+        log.info(f"Done {rid}" + (f" → {video_url}" if video_url else " (Telegram only)"))
 
     except Exception as e:
         log.error(f"Failed {rid}: {e}", exc_info=True)

@@ -76,12 +76,16 @@ ELEVEN_VOICE_ID=...             # дефолтный голос
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
 
-# Хранилище видео (Cloudflare R2 / Backblaze B2 / AWS S3)
-S3_ENDPOINT_URL=https://<acct>.r2.cloudflarestorage.com
-S3_ACCESS_KEY=...
-S3_SECRET_KEY=...
-S3_BUCKET=coinplay-videos
-S3_PUBLIC_BASE=https://cdn.coinplay.media   # публичный домен бакета
+# Хранилище видео (Cloudflare R2 / B2 / S3) — ОПЦИОНАЛЬНО.
+# Если не задано: заливка пропускается, ролик уходит в Telegram файлом,
+# поле Video_URL в Airtable остаётся пустым. Для прод-ссылок задайте все пять.
+# R2: S3_ENDPOINT_URL = https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+#     (EU-юрисдикция → https://<ACCOUNT_ID>.eu.r2.cloudflarestorage.com)
+S3_ENDPOINT_URL=
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+S3_BUCKET=
+S3_PUBLIC_BASE=
 
 # Опционально (есть дефолты)
 DEFAULT_DURATION=18

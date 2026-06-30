@@ -1,0 +1,71 @@
+{
+  "title": "The Wolf Billionaire's Secret",
+  "concept": "Werewolf-billionaire romance drama (TikTok melodrama style): a scorned doe confronts the cold alpha wolf tycoon on his rain-soaked penthouse balcony — and his earth-shattering secret turns out to be, absurdly, that his entire empire runs on Coinplay.",
+  "format": "romance-drama",
+  "setting": "a rain-soaked luxury penthouse balcony at night, a glowing neon-violet Coinplay city skyline behind, rain streaks lit by magenta and electric-blue light, floating purple spheres, golden coin particles drifting, dramatic cinematic key light, shallow depth of field",
+  "cast": [
+    {
+      "id": "kael",
+      "name": "Kael",
+      "design": "an alpha werewolf billionaire: a tall broad realistic adult male human body with a sleek grey-furred wolf head and pointed ears, intense glowing amber eyes, chiseled brooding human-like face with sharp features, wearing an immaculate tailored midnight-black three-piece suit, commanding posture; cinematic semi-realistic 3D, lead-character quality",
+      "personality": "cold, intense",
+      "voice": 1
+    },
+    {
+      "id": "lira",
+      "name": "Lira",
+      "design": "a graceful doe heroine: a slender realistic adult female human body with a soft fawn-brown deer head, tiny antler buds, enormous glistening expressive doe eyes built for huge emotion, delicate human-like face, wearing an elegant emerald silk evening dress, rain-damp; cinematic semi-realistic 3D, lead-character quality",
+      "personality": "wounded, defiant",
+      "voice": 2
+    },
+    {
+      "id": "coinplay_host",
+      "name": "Coinplay",
+      "design": "the Coinplay fox mascot",
+      "personality": "cool, confident",
+      "voice": 0
+    }
+  ],
+  "shots": [
+    {
+      "characters": ["lira", "kael"],
+      "visual": "Lira stands rain-soaked on the balcony, tears mixing with the rain, facing the cold towering Kael whose back is half-turned; the neon Coinplay skyline glows behind them",
+      "motion": "slow dramatic dolly from the wide glowing skyline pushing in to an extreme close-up on Lira's trembling tear-streaked face, rain in slow motion",
+      "dialogue": [
+        {"speaker": "lira", "line": "You used me. Was any of it real?"},
+        {"speaker": "kael", "line": "Every... single... second."}
+      ],
+      "mood": "argue"
+    },
+    {
+      "characters": ["kael", "lira"],
+      "visual": "Kael turns sharply, takes Lira's hand and pulls her close until their faces are inches apart; extreme close-up on the two faces, his glowing amber eyes softening, her breath catching, a tear on her cheek",
+      "motion": "intimate slow push to a tight two-shot close-up, his eyes flick from cold to tender, her eyes widen, rain glistening, shallow focus",
+      "dialogue": [
+        {"speaker": "kael", "line": "You think I'm the dangerous one?"},
+        {"speaker": "lira", "line": "...what are you saying?"}
+      ],
+      "mood": "reveal"
+    },
+    {
+      "characters": ["kael", "lira"],
+      "visual": "Kael lifts his glowing phone showing the Coinplay app; the entire violet skyline erupts with cascading golden coins, the city lighting up dramatically as Lira gasps",
+      "motion": "sweeping reveal — camera arcs from the phone out to the exploding golden skyline, then back to an emotional close-up of Lira's awe-struck, happy-tearful face, coins raining in slow motion",
+      "dialogue": [
+        {"speaker": "kael", "line": "Everything I am... I built on Coinplay."}
+      ],
+      "mood": "win"
+    },
+    {
+      "characters": ["coinplay_host"],
+      "visual": "the Coinplay fox mascot leans into frame beside the glowing logo, gives a sly confident wink to the camera as golden coins shimmer",
+      "motion": "subtle zoom on the mascot, sparkle pop, Coinplay logo glow blooms",
+      "dialogue": [
+        {"speaker": "narrator", "line": "Coinplay. The house always falls for you."}
+      ],
+      "mood": "hype"
+    }
+  ],
+  "on_screen_hook": "THE WOLF BILLIONAIRE'S SECRET",
+  "brand_payoff": "The brooding alpha's earth-shattering secret is, absurdly, that his whole empire runs on Coinplay."
+}

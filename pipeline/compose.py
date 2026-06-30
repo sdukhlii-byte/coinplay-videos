@@ -20,7 +20,7 @@ import os
 import logging
 
 import config as C
-from pipeline.media import run_ff, probe_duration
+from pipeline.media import run_ff, probe_duration, xfade_concat
 
 log = logging.getLogger("compose")
 
@@ -290,9 +290,14 @@ def compose_native(workdir: str, shot_clips: list[str], ass_path: str | None,
         normalize_shot_av(clip, dst)
         norm.append(dst)
 
-    # 2. склейка A/V (реэнкод — параметры уже унифицированы нормализацией)
+    # 2. склейка A/V: кроссфейд (если XFADE_SEC>0) либо встык (реэнкод — параметры
+    #    уже унифицированы нормализацией)
     body = os.path.join(workdir, "body.mp4")
-    _concat_demux(norm, body, workdir, reencode=True, label="body_av")
+    if getattr(C, "XFADE_SEC", 0) and len(norm) > 1:
+        xfade_concat(norm, body, transition=C.XFADE_SEC, has_audio=True,
+                     fps=C.FPS, label="body_av_xfade")
+    else:
+        _concat_demux(norm, body, workdir, reencode=True, label="body_av")
 
     # 3. прожиг: своё аудио (+опц. музыка) + субтитры(хук) + лого
     body_final = os.path.join(workdir, "body_final.mp4")

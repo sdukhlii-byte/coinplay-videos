@@ -1,0 +1,70 @@
+{
+  "title": "The Kiwi Comeback",
+  "concept": "A fruit couple watch the Fruit Cup final at a Coinplay sports bar; the tiny kiwi underdog scores at the buzzer and the wife melts into ecstatic happy tears — because the husband quietly backed the kiwi on Coinplay.",
+  "format": "sports-commentary",
+  "setting": "a glossy late-night Coinplay sports bar in the brand world, a giant neon scoreboard on the wall, violet ambience, floating purple spheres and golden coin particles, shallow cinematic depth of field",
+  "cast": [
+    {
+      "id": "rocky",
+      "name": "Rocky",
+      "design": "a strawberry character with a realistic athletic adult human body and natural proportions, a glossy ripe strawberry as the head, warm strawberry-red human-like skin with tiny seed freckles, expressive human face with thick brows, short green leafy hair tuft, casual dark streetwear bomber jacket; cinematic semi-realistic 3D, lead-character quality",
+      "personality": "calm, confident",
+      "voice": 1
+    },
+    {
+      "id": "nova",
+      "name": "Nova",
+      "design": "a strawberry character with a realistic adult human body, a glossy strawberry as the head with a small green leaf bow, soft strawberry-red human-like skin with seed freckles, very large expressive eyes and full eyelashes, delicate human face built for big emotion, pastel pink top; cinematic semi-realistic 3D, lead-character quality",
+      "personality": "emotional, warm",
+      "voice": 2
+    },
+    {
+      "id": "coinplay_host",
+      "name": "Coinplay",
+      "design": "the Coinplay fox mascot",
+      "personality": "cool, confident",
+      "voice": 0
+    }
+  ],
+  "shots": [
+    {
+      "characters": ["rocky", "nova"],
+      "visual": "the couple sit at the bar facing the giant scoreboard showing the Fruit Cup final, a tiny kiwi underdog versus a huge pineapple team, tense final seconds on the clock; Rocky calmly taps his glowing phone while Nova bites her nails",
+      "motion": "slow cinematic dolly push-in from the bright scoreboard down to Rocky's calm confident face, shallow focus, brand spheres drift",
+      "dialogue": [
+        {"speaker": "nova", "line": "We're going to lose, the kiwi is tiny!"},
+        {"speaker": "rocky", "line": "Just watch."}
+      ],
+      "mood": "vs"
+    },
+    {
+      "characters": ["nova"],
+      "visual": "the buzzer hits and the tiny kiwi scores the winning goal; EXTREME emotional close-up on Nova's face — eyes going wide, welling up, lips trembling, then breaking into an ecstatic disbelieving smile as happy tears roll down",
+      "motion": "slow-motion macro push onto her eyes, a single happy tear rolls, then her whole face lights up; soft golden glow rises behind her",
+      "dialogue": [
+        {"speaker": "nova", "line": "He scored... HE SCORED!"}
+      ],
+      "mood": "shock"
+    },
+    {
+      "characters": ["rocky", "nova"],
+      "visual": "the bar erupts, golden coins burst into the air; the couple leap up hugging, then Rocky smugly turns his glowing phone to the camera showing a Coinplay bet slip 'KIWI TO WIN — CASHED OUT'",
+      "motion": "camera orbits around the celebrating couple in slow motion, coins raining, then a snappy push onto the phone screen",
+      "dialogue": [
+        {"speaker": "rocky", "line": "I backed the underdog on Coinplay."}
+      ],
+      "mood": "win"
+    },
+    {
+      "characters": ["coinplay_host"],
+      "visual": "the Coinplay fox mascot leans into frame beside the glowing logo, gives a confident wink to the camera as coins shimmer",
+      "motion": "subtle zoom on the mascot, sparkle pop, Coinplay logo glow blooms",
+      "dialogue": [
+        {"speaker": "narrator", "line": "Coinplay. Back the underdog."}
+      ],
+      "mood": "hype"
+    }
+  ],
+  "on_screen_hook": "SHE THOUGHT THEY LOST",
+  "brand_payoff": "Nova's happy tears pay off because Rocky quietly backed the kiwi underdog on Coinplay."
+}

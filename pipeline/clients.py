@@ -91,7 +91,9 @@ def send_telegram_video(video_path: str, caption: str, retries: int = 3):
                     data={
                         "chat_id": C.TELEGRAM_CHAT,
                         "caption": caption[:1024],
-                        "parse_mode": "Markdown",
+                        # БЕЗ parse_mode: подпись содержит id персонажей с '_' (coinplay_host
+                        # и т.п.), а Markdown на них падает с 'can't parse entities' → 400.
+                        # Обычный текст шлётся всегда.
                         "supports_streaming": "true",
                     },
                     files={"video": (os.path.basename(video_path), f, "video/mp4")},

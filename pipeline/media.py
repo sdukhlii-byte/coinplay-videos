@@ -126,6 +126,72 @@ def concat_demux(paths: list[str], dst: str, workdir: str,
     return dst
 
 
+# ── СЦЕПКА ПО КАДРАМ / ПЛАВНЫЕ ПЕРЕХОДЫ ────────────────────────────────────────
+
+def extract_last_frame(src: str, dst: str) -> str:
+    """Достаёт ПОСЛЕДНИЙ кадр клипа как PNG (для сцепки шотов: конец N = старт N+1)."""
+    run_ff(
+        ["ffmpeg", "-y", "-sseof", "-0.1", "-i", src,
+         "-update", "1", "-frames:v", "1", "-q:v", "2", dst],
+        label="last_frame",
+    )
+    return dst
+
+
+def xfade_concat(paths: list[str], dst: str, transition: float,
+                 has_audio: bool, fps: int, label: str = "xfade") -> str:
+    """
+    Склейка клипов с КРОССФЕЙДАМИ (видео xfade + опц. acrossfade аудио) вместо
+    жёсткого стыка. Клипы могут быть разной длины. transition — длина перехода (сек).
+    Требует реэнкод (xfade нельзя в copy-режиме). Длина итога = sum(dur) - (n-1)*T.
+    """
+    n = len(paths)
+    if n == 1:
+        # один клип — переходов нет, просто нормализуем контейнер
+        args = ["ffmpeg", "-y", "-i", paths[0], "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps)]
+        if has_audio:
+            args += ["-c:a", "aac"]
+        args += [dst]
+        run_ff(args, label=label)
+        return dst
+
+    durs = [probe_duration(p) for p in paths]
+    args = ["ffmpeg", "-y"]
+    for p in paths:
+        args += ["-i", p]
+
+    # видео-цепочка xfade: offset = накопленная длительность - transition
+    vf = []
+    prev = "[0:v]"
+    acc = durs[0]
+    for k in range(1, n):
+        off = max(0.0, acc - transition)
+        out = f"[vx{k}]" if k < n - 1 else "[vout]"
+        vf.append(f"{prev}[{k}:v]xfade=transition=fade:duration={transition}:offset={off:.3f}{out}")
+        prev = out
+        acc = acc + durs[k] - transition
+    filters = ";".join(vf)
+    maps = ["-map", "[vout]"]
+
+    if has_audio:
+        af = []
+        aprev = "[0:a]"
+        for k in range(1, n):
+            out = f"[ax{k}]" if k < n - 1 else "[aout]"
+            af.append(f"{aprev}[{k}:a]acrossfade=d={transition}{out}")
+            aprev = out
+        filters += ";" + ";".join(af)
+        maps += ["-map", "[aout]"]
+
+    args += ["-filter_complex", filters] + maps
+    args += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps)]
+    if has_audio:
+        args += ["-c:a", "aac"]
+    args += [dst]
+    run_ff(args, label=label)
+    return dst
+
+
 # ── ВИДЕО-ФОЛБЭК: КЛИП ИЗ КАРТИНКИ (Ken Burns) ─────────────────────────────────
 
 def ken_burns_clip(image_path: str, dst: str, duration: float,

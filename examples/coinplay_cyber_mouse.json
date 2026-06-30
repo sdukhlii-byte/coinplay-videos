@@ -1,0 +1,55 @@
+{
+  "title": "Tiny Mouse, Grand Final",
+  "concept": "A giant wolf esports champ trash-talks a tiny mouse in the grand final — the mouse stays ice-calm because he already bet on himself on Coinplay.",
+  "format": "vs-duel",
+  "setting": "a packed neon esports arena finals stage, two facing gaming rigs on a raised desk, giant glowing scoreboards, dramatic spotlights and lasers, dark crowd silhouettes cheering, glossy floating purple spheres and golden coin particles drifting in the air",
+  "cast": [
+    {
+      "id": "mouse",
+      "name": "Pip",
+      "design": "a tiny anthropomorphic esports-pro mouse, glossy soft grey fur, huge expressive eyes with a cocky half-squint, oversized neon-violet gaming headset, a sleek black bomber jacket with glowing magenta trim, tiny fast paws, perched on a stack of books to reach the keyboard; thick clean outlines, stylized 3D cartoon, Pixar-meets-streetwear render",
+      "personality": "calm, cocky",
+      "voice": 1
+    },
+    {
+      "id": "wolf",
+      "name": "Fang",
+      "design": "a towering muscular anthropomorphic grey wolf gamer, broad shoulders, intense glowing yellow eyes, a sleeveless dark esports jersey, fingerless gloves, sharp fangs in an arrogant grin, twitchy aggressive posture; thick clean outlines, stylized 3D cartoon",
+      "personality": "loud, arrogant",
+      "voice": 2
+    }
+  ],
+  "shots": [
+    {
+      "characters": ["wolf", "mouse"],
+      "visual": "low wide shot of the two rigs facing off; the huge wolf cracks his knuckles and leans over the desk, while the tiny mouse barely peeks over the keyboard on his stack of books, calm and unbothered, neon arena lights blazing behind them",
+      "motion": "fast dolly push-in from the roaring crowd toward the desk, then a quick whip-pan from the snarling wolf across to the mouse's calm half-squint, camera settles low",
+      "dialogue": [
+        {"speaker": "wolf", "line": "Go home, snack. This stage is for predators."},
+        {"speaker": "mouse", "line": "Cute. I already won."}
+      ],
+      "mood": "vs"
+    },
+    {
+      "characters": ["mouse", "wolf"],
+      "visual": "the final play: the mouse's paws blur across the keyboard, the giant scoreboard erupts with a glowing VICTORY, golden coins and confetti burst into the air, the wolf's jaw drops in comedic shock as the crowd of predator silhouettes goes wild",
+      "motion": "low-angle hero shot, slow orbit around the mouse as he stands up on the desk, slow-motion coin rain, the camera arcs from the mouse to the wolf's stunned face",
+      "dialogue": [
+        {"speaker": "wolf", "line": "That's... impossible."}
+      ],
+      "mood": "shock"
+    },
+    {
+      "characters": ["mouse", "wolf"],
+      "visual": "the wolf grabs his head in disbelief; the mouse smugly spins his glowing phone toward the camera showing a Coinplay bet slip 'PIP TO WIN — CASHED OUT', purple Coinplay glow and golden coins raining behind him",
+      "motion": "over-the-shoulder push onto the glowing phone screen, then a snappy whip back to the mouse winking straight at the camera, subtle zoom, sparkle pop, Coinplay logo glow blooms behind him",
+      "dialogue": [
+        {"speaker": "wolf", "line": "How are you SO calm?!"},
+        {"speaker": "mouse", "line": "I bet on myself. Coinplay paid out before you blinked."}
+      ],
+      "mood": "smug"
+    }
+  ],
+  "on_screen_hook": "GIANT WOLF vs TINY MOUSE",
+  "brand_payoff": "The underdog stayed calm because he backed himself on Coinplay and already cashed out."
+}

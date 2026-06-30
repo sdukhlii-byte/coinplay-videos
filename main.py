@@ -66,6 +66,50 @@ def _field(fields: dict, key: str, default=""):
     return str(fields.get(key, default)).strip()
 
 
+# ── АНИМАЦИЯ ШОТОВ: параллельно ИЛИ со сцепкой по кадрам ───────────────────────
+
+def _animate_parallel(n: int, keyframes: list, anim_fn) -> list:
+    """Текущее поведение: шоты независимы, гоним параллельно."""
+    clips = [""] * n
+
+    def _run(i):
+        return i, anim_fn(i, keyframes[i])
+
+    with ThreadPoolExecutor(max_workers=max(1, min(C.MAX_PARALLEL_JOBS, n))) as ex:
+        for fut in as_completed([ex.submit(_run, i) for i in range(n)]):
+            idx, path = fut.result()
+            clips[idx] = path
+    return clips
+
+
+def _animate_chained(workdir: str, n: int, keyframes: list, anim_fn) -> list:
+    """
+    Сцепка по кадрам: первый кадр шота i = ПОСЛЕДНИЙ кадр шота i-1 → бесшовный поток.
+    Поэтому строго ПОСЛЕДОВАТЕЛЬНО (i+1 ждёт результат i). Сид-кадр прогоняем через
+    visuals._video_frame_url (R2-URL при STORAGE_ENABLED, иначе data-URL).
+    """
+    clips = [""] * n
+    for i in range(n):
+        if i > 0 and clips[i - 1]:
+            try:
+                lf = os.path.join(workdir, f"chain_lf_{i:02d}.png")
+                media.extract_last_frame(clips[i - 1], lf)
+                seed_url = visuals._video_frame_url(lf)
+                keyframes[i] = (seed_url, lf)
+                log.info("frame-chain: shot %d seeded from last frame of shot %d", i, i - 1)
+            except Exception as e:  # noqa: BLE001
+                log.warning("frame-chain: seed for shot %d failed (%s) — using own keyframe",
+                            i, str(e)[:120])
+        clips[i] = anim_fn(i, keyframes[i])
+    return clips
+
+
+def _animate(workdir: str, n: int, keyframes: list, anim_fn) -> list:
+    if C.FRAME_CHAIN:
+        return _animate_chained(workdir, n, keyframes, anim_fn)
+    return _animate_parallel(n, keyframes, anim_fn)
+
+
 def _build_video(workdir: str, script: dict, language: str,
                  out_path: str) -> dict:
     """
@@ -119,20 +163,16 @@ def _render_veo(workdir, script, language, shots, cast_by_id, cast_refs,
             idx, kf = fut.result()
             keyframes[idx] = kf
 
-    # Veo i2v со звуком (параллельно). Каждый шот = ~8-сек клип, где персонажи говорят.
-    clips: list[str] = [""] * n
-
-    def _do_anim(i):
-        kf_url, kf_path = keyframes[i]
-        return i, visuals.animate_shot(
+    # Veo i2v со звуком. Каждый шот = ~8-сек клип, где персонажи говорят.
+    # Параллельно (по умолчанию) либо последовательно со сцепкой по кадрам (FRAME_CHAIN).
+    def _anim(i, kf):
+        kf_url, kf_path = kf
+        return visuals.animate_shot(
             workdir, i, kf_url, kf_path, shots[i], target_sec=8.0,
             cast_by_id=cast_by_id, setting=setting, language=language,
         )
 
-    with ThreadPoolExecutor(max_workers=max(1, min(C.MAX_PARALLEL_JOBS, n))) as ex:
-        for fut in as_completed([ex.submit(_do_anim, i) for i in range(n)]):
-            idx, path = fut.result()
-            clips[idx] = path
+    clips = _animate(workdir, n, keyframes, _anim)
 
     durations = [media.probe_duration(c) for c in clips]
 
@@ -189,17 +229,13 @@ def _render_tts(workdir, script, language, shots, cast, cast_by_id, cast_refs,
     durations = [max(voices[i][1] + C.VOICE_TAIL_SEC, C.MIN_SHOT_SEC) for i in range(n)]
 
     hero = _hero_shots()
-    clips: list[str] = [""] * n
 
-    def _do_anim(i):
-        kf_url, kf_path = keyframes[i]
-        return i, visuals.animate_shot(workdir, i, kf_url, kf_path, shots[i],
-                                       durations[i], hero=(i in hero))
+    def _anim(i, kf):
+        kf_url, kf_path = kf
+        return visuals.animate_shot(workdir, i, kf_url, kf_path, shots[i],
+                                    durations[i], hero=(i in hero))
 
-    with ThreadPoolExecutor(max_workers=max(1, min(C.MAX_PARALLEL_JOBS, n))) as ex:
-        for fut in as_completed([ex.submit(_do_anim, i) for i in range(n)]):
-            idx, path = fut.result()
-            clips[idx] = path
+    clips = _animate(workdir, n, keyframes, _anim)
 
     words_global: list[dict] = []
     cursor = 0.0

@@ -304,6 +304,18 @@ def process_record(record: dict):
         out_path = os.path.join(workdir, "output.mp4")
         meta = _build_video(workdir, script, language, out_path)
 
+        # 2b) Локальный архив на персистентном томе (до доставки — чтобы не терять
+        #     рендер, даже если Telegram/заливка упадут). См. LOCAL_ARCHIVE_DIR.
+        if getattr(C, "LOCAL_ARCHIVE_DIR", ""):
+            try:
+                os.makedirs(C.LOCAL_ARCHIVE_DIR, exist_ok=True)
+                archive_path = os.path.join(C.LOCAL_ARCHIVE_DIR, f"{rid}.mp4")
+                shutil.copy2(out_path, archive_path)
+                log.info("Archived render → %s (%.1f MB)",
+                         archive_path, os.path.getsize(archive_path) / 1e6)
+            except Exception as e:  # noqa: BLE001
+                log.warning("Local archive failed (%s) — render NOT backed up", str(e)[:140])
+
         # 3) Заливка (если включена) + Telegram + Airtable
         if C.STORAGE_ENABLED:
             key = f"videos/{rid}_{int(time.time())}.mp4"

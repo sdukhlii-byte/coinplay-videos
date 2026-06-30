@@ -351,6 +351,26 @@ def process_record(record: dict):
         shutil.rmtree(workdir, ignore_errors=True)
 
 
+def _serve_archive():
+    """
+    SERVE_ARCHIVE=1 — вместо генерации поднять мини HTTP-сервер над LOCAL_ARCHIVE_DIR,
+    чтобы скачивать готовые ролики из браузера. Слушает $PORT (Railway).
+    ВНИМАНИЕ: без авторизации — это временный режим «зашёл-скачал-выключил».
+    Для доступа сервису нужен публичный домен (Railway → Settings → Networking).
+    """
+    import http.server
+    import socketserver
+    import functools
+
+    directory = C.LOCAL_ARCHIVE_DIR or "/data"
+    port = int(os.environ.get("PORT", "8080"))
+    os.makedirs(directory, exist_ok=True)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
+    log.info("SERVE_ARCHIVE: раздаю %s на :%d (открой домен сервиса в браузере)", directory, port)
+    with socketserver.TCPServer(("0.0.0.0", port), handler) as httpd:
+        httpd.serve_forever()
+
+
 def main():
     log.info("=== Coinplay Video Generator ===")
     log.info("Table=%s budget=%ss max_records=%s parallel=%s",
@@ -379,4 +399,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if os.environ.get("SERVE_ARCHIVE", "").strip().lower() in ("1", "true", "yes", "on"):
+        _serve_archive()
+    else:
+        main()

@@ -327,7 +327,7 @@ def process_record(record: dict):
             log.info("Storage disabled — отправляю только в Telegram, Video_URL пустой.")
 
         cast_line = ", ".join(meta["cast"]) if meta["cast"] else "narrator"
-        caption = (f"🎬 *{script.get('title', topic)}*\n"
+        caption = (f"🎬 {script.get('title', topic)}\n"
                    f"Cast: {cast_line}\n"
                    f"Lang: {language}  •  {meta['shots']} shots  •  {meta['duration']:.1f}s{link_line}")
         clients.send_telegram_video(out_path, caption)

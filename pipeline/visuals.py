@@ -197,6 +197,86 @@ def _quantize_duration(target_sec: float) -> int:
     return allowed[-1]
 
 
+# ── ВТОРИЧНЫЙ ДВИЖОК (Seedance 1.5 Pro) — фолбэк при отказе Veo ─────────────────
+
+def _animate_seedance(workdir: str, idx: int, keyframe_url: str,
+                      keyframe_path: str, prompt: str) -> str:
+    """
+    Анимация шота вторичным i2v-движком (Seedance 1.5 Pro по умолчанию) с НАТИВНЫМ
+    аудио. Зовётся, когда основной движок (Veo) отклонил шот по контент-политике —
+    у Seedance фильтр мягче, а звук остаётся внутри клипа (реплики не теряются),
+    поэтому результат ложится в compose_native ровно как клип Veo.
+
+    Адаптер параметров (Seedance ≠ Veo!):
+      • aspect_ratio — у Seedance дефолт «16:9»; шлём C.VEO_ASPECT («9:16») ЯВНО,
+        иначе вертикаль обрежется;
+      • duration — СТРОКА секунд (4..12), без суффикса «s»;
+      • enable_safety_checker (булев) ВМЕСТО veo-шного safety_tolerance;
+      • generate_audio — нативная речь+эмбиент.
+    Первый кадр: http(s)-URL предпочтительнее; data-URL fal тоже принимает.
+    """
+    raw_path = os.path.join(workdir, f"shot_{idx:02d}_raw.mp4")
+    frame = keyframe_url if (keyframe_url or "").startswith("http") else _video_frame_url(keyframe_path)
+    dur = (C.SECONDARY_DURATION or str(C.VEO_DURATION)).strip().lower().rstrip("s").strip() or "5"
+
+    payload = {
+        "prompt": prompt,
+        "image_url": frame,
+        "aspect_ratio": C.VEO_ASPECT,                 # 9:16 — ЯВНО (дефолт Seedance 16:9)
+        "resolution": C.SECONDARY_RESOLUTION,
+        "duration": dur,                              # строка секунд
+        "generate_audio": bool(C.SECONDARY_GENERATE_AUDIO),
+        "enable_safety_checker": bool(C.SECONDARY_SAFETY_CHECKER),
+    }
+    res = falclient.run(C.SECONDARY_VIDEO_MODEL, payload, timeout=900, label=f"seed{idx}")
+    url = falclient.first_video_url(res)
+    _download(url, raw_path)
+    log.info("Shot %d animated via Seedance (audio=%s, safety_checker=%s): %s",
+             idx, C.SECONDARY_GENERATE_AUDIO, C.SECONDARY_SAFETY_CHECKER, raw_path)
+    return raw_path
+
+
+# ── ПОСЛЕДНИЙ ФОЛБЭК: Ken Burns + закадр TTS (не немой) ────────────────────────
+
+def _kenburns_with_tts(workdir: str, idx: int, keyframe_path: str, shot: dict,
+                       target_sec: float, cast_by_id: dict | None,
+                       language: str) -> str:
+    """
+    Статичный клип из кейфрейма (Ken Burns) + озвучка реплик шота через ElevenLabs,
+    чтобы шот не уходил немым. Длину диктует длина озвучки (+хвост). Если KENBURNS_TTS
+    выключен, реплик нет или TTS упал — обычный немой Ken Burns (как раньше).
+    """
+    raw_path = os.path.join(workdir, f"shot_{idx:02d}_raw.mp4")
+    dialogue = [d for d in (shot.get("dialogue") or []) if str(d.get("line", "")).strip()]
+
+    if not getattr(C, "KENBURNS_TTS", False) or not dialogue:
+        media.ken_burns_clip(keyframe_path, raw_path, max(target_sec, C.MIN_SHOT_SEC),
+                             C.VIDEO_W, C.VIDEO_H, C.FPS)
+        return raw_path
+
+    try:
+        from pipeline import voice as voicegen     # ленивый импорт (как и orclient)
+        speaker_roles = {"narrator": 0}
+        for cid, m in (cast_by_id or {}).items():
+            speaker_roles[cid] = int(m.get("voice", 0))
+        voice_wav, vdur, _ = voicegen.synthesize_shot(
+            workdir, idx, dialogue, speaker_roles, language)
+        clip_dur = max(vdur + C.VOICE_TAIL_SEC, C.MIN_SHOT_SEC)
+        silent = os.path.join(workdir, f"shot_{idx:02d}_kb_silent.mp4")
+        media.ken_burns_clip(keyframe_path, silent, clip_dur,
+                             C.VIDEO_W, C.VIDEO_H, C.FPS)
+        media.mux_audio(silent, voice_wav, raw_path, clip_dur)
+        log.info("Shot %d Ken Burns + TTS voiceover (%.2fs, %d lines): %s",
+                 idx, clip_dur, len(dialogue), raw_path)
+        return raw_path
+    except Exception as e:  # noqa: BLE001
+        log.warning("Shot %d Ken Burns TTS failed (%s) — silent Ken Burns",
+                    idx, str(e)[:120])
+        media.ken_burns_clip(keyframe_path, raw_path, max(target_sec, C.MIN_SHOT_SEC),
+                             C.VIDEO_W, C.VIDEO_H, C.FPS)
+        return raw_path
+
+
 def animate_shot(workdir: str, idx: int, keyframe_url: str, keyframe_path: str,
                  shot: dict, target_sec: float, hero: bool = False,
                  cast_by_id: dict | None = None, setting: str = "",
@@ -248,13 +328,20 @@ def animate_shot(workdir: str, idx: int, keyframe_url: str, keyframe_path: str,
                          idx, C.VEO_TIER, C.VEO_GENERATE_AUDIO, raw_path)
             return raw_path
         except Exception as e:
+            log.warning("Shot %d Veo failed (%s)", idx, str(e)[:140])
+            # ── ЦЕПОЧКА ФОЛБЭКА ────────────────────────────────────────────────
+            # 1) Вторичный движок (Seedance): мягче фильтр + нативное аудио, поэтому
+            #    реплики НЕ теряются, а результат ложится в compose_native как Veo-клип.
+            if getattr(C, "SECONDARY_VIDEO_ENABLED", False):
+                try:
+                    return _animate_seedance(workdir, idx, keyframe_url, keyframe_path, prompt)
+                except Exception as e2:  # noqa: BLE001
+                    log.warning("Shot %d Seedance fallback failed (%s)", idx, str(e2)[:140])
+            # 2) Последний фолбэк: Ken Burns + закадр TTS (чтобы не был немым).
             if not C.I2V_FALLBACK_KENBURNS:
                 raise
-            log.warning("Shot %d Veo failed (%s) — Ken Burns fallback (silent)",
-                        idx, str(e)[:140])
-            media.ken_burns_clip(keyframe_path, raw_path, max(target_sec, C.MIN_SHOT_SEC),
-                                 C.VIDEO_W, C.VIDEO_H, C.FPS)
-            return raw_path
+            return _kenburns_with_tts(workdir, idx, keyframe_path, shot,
+                                      target_sec, cast_by_id, language)
 
     # ── kling (или иной) i2v без звука ──────────────────────────────────────────
     dur = _quantize_duration(target_sec)

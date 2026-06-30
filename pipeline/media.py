@@ -52,6 +52,23 @@ def has_audio(path: str) -> bool:
     return proc.returncode == 0 and bool(proc.stdout.strip())
 
 
+def mux_audio(video_src: str, audio_src: str, dst: str, duration: float) -> str:
+    """
+    Накладывает аудиодорожку (wav) на видео БЕЗ звука и режет результат до `duration`.
+    Аудио дополняется тишиной (apad) и обрезается под длину видео, видеопоток
+    копируется без реэнкода. Используется для фолбэка «Ken Burns + закадр TTS»,
+    чтобы статичный клип не уходил немым.
+    """
+    run_ff([
+        "ffmpeg", "-y", "-i", video_src, "-i", audio_src,
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-af", "apad", "-t", f"{duration:.3f}",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2",
+        "-movflags", "+faststart", dst,
+    ], label="mux_audio")
+    return dst
+
+
 # ── АУДИО-КИРПИЧИ ──────────────────────────────────────────────────────────────
 
 def make_silence(dst: str, duration: float, sr: int = 44100) -> str:

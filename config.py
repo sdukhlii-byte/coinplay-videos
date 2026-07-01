@@ -204,6 +204,20 @@ FAL_FALLBACK_IMAGE_MODEL = _opt("FAL_FALLBACK_IMAGE_MODEL", "fal-ai/flux/dev")
 # Лёгкий минус: все картинки чуть «причёсаннее» (fully clothed / non-sexual).
 IMAGE_SAFE_FIRST = _flag("IMAGE_SAFE_FIRST", False)
 
+# ── ПЛОТНЫЙ МОНТАЖ Veo-клипов (убрать мёртвые хвосты после реплики) ────────────
+# Veo отдаёт клип фиксированной длины (~8с). После того как персонаж договорил,
+# остаётся «хвост» с дрейфом/шумом. Обрезаем каждый клип до конца речи (+буфер),
+# а молчаливые/B-roll шоты — до короткого бита. Итог плотнее: всегда речь ИЛИ движение.
+VEO_TIGHT_TRIM    = _flag("VEO_TIGHT_TRIM", True)
+VEO_LEADIN_SEC    = float(_opt("VEO_LEADIN_SEC", "0.6"))     # запас на паузу до начала речи
+VEO_TRIM_TAIL_SEC = float(_opt("VEO_TRIM_TAIL_SEC", "0.7"))  # хвост после реплики
+VEO_SILENT_SEC    = float(_opt("VEO_SILENT_SEC", "3.0"))     # длина молчаливого/B-roll шота
+VEO_MIN_SHOT_SEC  = float(_opt("VEO_MIN_SHOT_SEC", "2.5"))   # пол на любой шот
+VEO_SPEECH_WPS    = float(_opt("VEO_SPEECH_WPS", "2.3"))     # слов/сек (драм-подача медленнее)
+
+# Эндкарта: убран синий CTA-текст (лого само несёт coinplay.com). Опц. белая подпись.
+ENDCARD_TAGLINE = _opt("ENDCARD_TAGLINE", "")   # пусто = только лого по центру
+
 # ── ВИДЕО-ДВИЖОК ───────────────────────────────────────────────────────────────
 # VIDEO_ENGINE=veo   — Veo 3.1 image-to-video с НАТИВНЫМ аудио: персонажи сами
 #                      говорят свои реплики с липсинком (+эмбиент). ElevenLabs не

@@ -247,6 +247,11 @@ def veo_i2v_model() -> str:
 
 
 VEO_DURATION   = _opt("VEO_DURATION", "8s")        # длина клипа шота: "8s"/"6s"/"4s"
+# VEO_DYNAMIC_DURATION=1 — длину каждого шота выбираем ПОД РЕПЛИКУ (квантуем вверх
+# к VEO_ALLOWED_DURATIONS), а не фиксируем 8с. Veo тарифицируется за сгенерированные
+# секунды → короткая реплика/молчаливый B-roll в 4с вместо 8с ≈ вдвое дешевле счёт.
+VEO_DYNAMIC_DURATION  = _flag("VEO_DYNAMIC_DURATION", False)
+VEO_ALLOWED_DURATIONS = [int(x) for x in _opt("VEO_ALLOWED_DURATIONS", "4,6,8").split(",")]
 VEO_RESOLUTION = _opt("VEO_RESOLUTION", "1080p")   # 720p/1080p (для std/fast цена та же)
 VEO_ASPECT     = _opt("VEO_ASPECT", "9:16")        # вертикаль
 VEO_GENERATE_AUDIO = _flag("VEO_GENERATE_AUDIO", True)   # пусть модель сама говорит

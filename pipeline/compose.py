@@ -126,25 +126,40 @@ def burn(body: str, voice_wav: str, ass_path: str, logo_path: str,
 
 # ── 5. ЭНД-КАРТА ───────────────────────────────────────────────────────────────
 
-def make_endcard(logo_path: str, dst: str, cta_text: str = "COINPLAY.COM",
-                 seconds: float = 2.0) -> None:
-    font = C.FONT_DISPLAY
-    logo_w = int(C.VIDEO_W * 0.55)
-    bg = f"color=c=0x140033:s={C.VIDEO_W}x{C.VIDEO_H}:r={C.FPS}:d={seconds}"
-    fc = (
+def make_endcard(logo_path: str, dst: str, cta_text: str = "",
+                 seconds: float = 2.0, tagline: str | None = None) -> None:
+    """
+    Брендовый аутро. Синий CTA-текст УБРАН — лого само несёт coinplay.com, а дубль
+    крупным голубым выглядел дёшево. Теперь: лого по центру на брендовом фоне,
+    опционально аккуратная белая подпись (config.ENDCARD_TAGLINE), иначе — чисто лого.
+    (`cta_text` оставлен для обратной совместимости сигнатуры и не рисуется.)
+    """
+    logo_w = int(C.VIDEO_W * 0.60)
+    bg = f"color=c=0x120A2E:s={C.VIDEO_W}x{C.VIDEO_H}:r={C.FPS}:d={seconds}"
+    tag = tagline if tagline is not None else getattr(C, "ENDCARD_TAGLINE", "")
+
+    chain = (
         f"[0:v]format=yuv420p[bg];"
         f"[1:v]scale={logo_w}:-1[logo];"
-        f"[bg][logo]overlay=(W-w)/2:(H-h)/2-120[bv];"
-        f"[bv]drawtext=fontfile='{font}':text='{cta_text}':"
-        f"fontcolor=0x33E0FF:fontsize={int(C.VIDEO_H*0.045)}:"
-        f"x=(w-text_w)/2:y=H/2+120:borderw=3:bordercolor=0x301040[vout]"
+        f"[bg][logo]overlay=(W-w)/2:(H-h)/2[bv]"
     )
+    if tag:
+        font = C.FONT_DISPLAY
+        safe = tag.replace(":", "\\:").replace("'", "")
+        chain += (
+            f";[bv]drawtext=fontfile='{font}':text='{safe}':"
+            f"fontcolor=white@0.9:fontsize={int(C.VIDEO_H*0.028)}:"
+            f"x=(w-text_w)/2:y=(H/2)+{int(logo_w*0.30)}[vout]"
+        )
+    else:
+        chain += ";[bv]null[vout]"
+
     run_ff([
         "ffmpeg", "-y",
         "-f", "lavfi", "-i", bg,
         "-i", logo_path,
         "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo:d={seconds}",
-        "-filter_complex", fc,
+        "-filter_complex", chain,
         "-map", "[vout]", "-map", "2:a",
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast",
         "-c:a", "aac", "-b:a", "160k", "-r", str(C.FPS), "-t", f"{seconds}",
@@ -198,20 +213,36 @@ def compose(workdir: str, shot_clips: list[str], shot_durations: list[float],
 #  НАТИВНОЕ АУДИО (Veo 3.1): звук уже ВНУТРИ клипов (речь+эмбиент), TTS не нужен.
 # ══════════════════════════════════════════════════════════════════════════════
 
-def normalize_shot_av(src: str, dst: str) -> None:
+def _estimate_speech_sec(dialogue: list | None) -> float:
+    """Грубая оценка длительности речи шота по тексту реплик (сек). 0 = молчаливый шот."""
+    words = lines = 0
+    for d in (dialogue or []):
+        t = str(d.get("line", "")).strip()
+        if t:
+            words += len(t.split())
+            lines += 1
+    if not words:
+        return 0.0
+    wps = max(1.5, getattr(C, "VEO_SPEECH_WPS", 2.3))
+    return words / wps + lines * 0.35
+
+
+def normalize_shot_av(src: str, dst: str, max_dur: float | None = None) -> None:
     """
     Клип → кадр VIDEO_WxVIDEO_H (cover-crop), FPS, СОХРАНЯЯ аудио. Длину НЕ трогаем
-    (натуральная длина клипа Veo). Если у клипа нет звука (фолбэк Ken Burns) —
-    подкладываем тишину, чтобы конкат с остальными (со звуком) не ломался.
+    (натуральная длина клипа Veo), КРОМЕ случая max_dur — тогда обрезаем до max_dur
+    (плотный монтаж: срезаем мёртвый хвост после реплики). Если у клипа нет звука
+    (фолбэк Ken Burns) — подкладываем тишину, чтобы конкат со звуковыми не ломался.
     """
     from pipeline.media import has_audio
     vf = (
         f"scale={C.VIDEO_W}:{C.VIDEO_H}:force_original_aspect_ratio=increase,"
         f"crop={C.VIDEO_W}:{C.VIDEO_H},fps={C.FPS},setsar=1"
     )
+    trim = ["-t", f"{max_dur:.3f}"] if max_dur else []
     if has_audio(src):
         run_ff([
-            "ffmpeg", "-y", "-i", src,
+            "ffmpeg", "-y", "-i", src, *trim,
             "-vf", vf,
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(C.FPS),
             "-profile:v", "high", "-preset", "veryfast",
@@ -222,7 +253,7 @@ def normalize_shot_av(src: str, dst: str) -> None:
         run_ff([
             "ffmpeg", "-y", "-i", src,
             "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-            "-vf", vf, "-shortest",
+            *trim, "-vf", vf, "-shortest",
             "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(C.FPS),
             "-profile:v", "high", "-preset", "veryfast",
@@ -278,16 +309,32 @@ def burn_native(body: str, ass_path: str | None, logo_path: str,
 
 def compose_native(workdir: str, shot_clips: list[str], ass_path: str | None,
                    logo_path: str, music_path: str | None, cta_text: str,
-                   out_path: str) -> str:
+                   out_path: str, shots: list | None = None) -> str:
     """
     Сборка для Veo-режима. Звук берётся из самих клипов (речь+эмбиент).
     Нет паддинга голоса и нет инварианта d_i — длину диктуют клипы.
+
+    Плотный монтаж (VEO_TIGHT_TRIM): каждый клип обрезаем до конца речи (+буфер),
+    молчаливые/B-roll — до короткого бита, чтобы не было мёртвых хвостов.
     """
-    # 1. нормализация шотов c сохранением аудио
+    tight = getattr(C, "VEO_TIGHT_TRIM", True)
+    # 1. нормализация шотов c сохранением аудио (+обрезка хвостов)
     norm = []
     for i, clip in enumerate(shot_clips):
+        max_dur = None
+        if tight:
+            nat = probe_duration(clip)
+            dlg = (shots[i].get("dialogue") if (shots and i < len(shots)) else None) or []
+            sp = _estimate_speech_sec(dlg)
+            target = (C.VEO_LEADIN_SEC + sp + C.VEO_TRIM_TAIL_SEC) if sp > 0 else C.VEO_SILENT_SEC
+            target = max(target, C.VEO_MIN_SHOT_SEC)
+            # обрезаем ТОЛЬКО если это заметно короче натуральной длины (не режем речь)
+            if target < nat - 0.75:
+                max_dur = target
+                log.info("Shot %d trim %.1fs → %.1fs (%s)", i, nat, target,
+                         "speech" if sp > 0 else "silent")
         dst = os.path.join(workdir, f"norm_{i:02d}.mp4")
-        normalize_shot_av(clip, dst)
+        normalize_shot_av(clip, dst, max_dur=max_dur)
         norm.append(dst)
 
     # 2. склейка A/V: кроссфейд (если XFADE_SEC>0) либо встык (реэнкод — параметры

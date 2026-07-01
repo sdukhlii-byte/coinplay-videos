@@ -159,26 +159,59 @@ def generate_video_bytes(model: str, prompt: str, frame_image_url: str,
         ],
     }
 
-    # Submit
-    r = requests.post(f"{_BASE}/videos", headers=_headers(), json=payload, timeout=60)
-    _raise_for_response(r, f"video-submit[{label}]")
-    sub = r.json()
-    job_id = sub.get("id", "?")
+    # Submit (с ретраем на рейт-лимит). OpenRouter под нагрузкой умеет вернуть 429
+    # ИЛИ HTTP 200 с пустым телом без job id. Короткий бэкофф на ТОМ ЖЕ Veo лучше,
+    # чем сразу падать в Seedance: шот остаётся на Veo, картинка консистентна.
+    # Если после ретраев id так и нет — падаем (→ фолбэк Seedance/Ken Burns в animate_shot).
+    job_id = None
+    sub: dict = {}
+    for attempt in range(3):
+        r = requests.post(f"{_BASE}/videos", headers=_headers(), json=payload, timeout=60)
+        if r.status_code != 429:
+            _raise_for_response(r, f"video-submit[{label}]")   # не-рейт-лимит ошибки → наверх
+            sub = r.json()
+            if sub.get("error"):
+                raise RuntimeError(f"OpenRouter video-submit[{label}] error: {str(sub)[:200]}")
+            job_id = sub.get("id")
+            if job_id:
+                break
+        if attempt < 2:
+            wait = 5 * (attempt + 1)
+            log.warning("or video-submit[%s] rate-limited/empty (HTTP %s), retry %d/3 in %ds",
+                        label, r.status_code, attempt + 1, wait)
+            time.sleep(wait)
+    if not job_id:
+        raise RuntimeError(
+            f"OpenRouter video-submit[{label}] returned no job id after retries "
+            f"(likely rate-limited): {str(sub)[:160]}"
+        )
     polling_url = sub.get("polling_url") or f"{_BASE}/videos/{job_id}"
     log.info("or video[%s] submitted job=%s status=%s", label or model, job_id, sub.get("status"))
 
     # Poll
     deadline = time.monotonic() + timeout
     content_url = None
+    poll_fails = 0
     while True:
         if time.monotonic() > deadline:
             raise RuntimeError(f"OpenRouter video[{label}] timeout after {timeout:.0f}s (job={job_id})")
         time.sleep(poll_interval)
         p = requests.get(polling_url, headers=_headers(), timeout=60)
         if not p.ok:
-            # сетевые/временные на поллинге — терпим до дедлайна
-            log.warning("or video poll HTTP %s: %s", p.status_code, p.text[:200])
+            # 404/410 = джобы не существует (битый сабмит / истекла) → ТЕРМИНАЛЬНО,
+            # ретраить бессмысленно, раньше это крутилось до самого дедлайна. Падаем,
+            # чтобы включился фолбэк.
+            if p.status_code in (404, 410):
+                raise RuntimeError(
+                    f"OpenRouter video[{label}] poll {p.status_code} — job missing (job={job_id})")
+            # прочие (429/5xx) — временные, но терпим лишь ограниченно подряд.
+            poll_fails += 1
+            log.warning("or video poll HTTP %s (%d/5): %s", p.status_code, poll_fails, p.text[:160])
+            if poll_fails >= 5:
+                raise RuntimeError(
+                    f"OpenRouter video[{label}] poll failing repeatedly (last HTTP {p.status_code})")
             continue
+        poll_fails = 0
         js = p.json()
         status = js.get("status")
         if status == "completed":

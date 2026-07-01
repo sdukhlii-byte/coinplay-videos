@@ -186,7 +186,7 @@ def _render_veo(workdir, script, language, shots, cast_by_id, cast_refs,
 
     music = _pick_music() if C.VEO_MUSIC_UNDER else None
     compose.compose_native(workdir, clips, ass_path, C.LOGO_PATH, music,
-                           C.CTA_TEXT, out_path)
+                           C.CTA_TEXT, out_path, shots=shots)
 
     return {"duration": sum(durations), **meta_common}
 

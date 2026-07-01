@@ -20,7 +20,7 @@ import os
 import logging
 
 import config as C
-from pipeline.media import run_ff, probe_duration, xfade_concat
+from pipeline.media import run_ff, probe_duration, xfade_concat, estimate_speech_sec
 
 log = logging.getLogger("compose")
 
@@ -214,17 +214,8 @@ def compose(workdir: str, shot_clips: list[str], shot_durations: list[float],
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _estimate_speech_sec(dialogue: list | None) -> float:
-    """Грубая оценка длительности речи шота по тексту реплик (сек). 0 = молчаливый шот."""
-    words = lines = 0
-    for d in (dialogue or []):
-        t = str(d.get("line", "")).strip()
-        if t:
-            words += len(t.split())
-            lines += 1
-    if not words:
-        return 0.0
-    wps = max(1.5, getattr(C, "VEO_SPEECH_WPS", 2.3))
-    return words / wps + lines * 0.35
+    """Обёртка над общим util (единый источник правды с сабмитом Veo)."""
+    return estimate_speech_sec(dialogue, getattr(C, "VEO_SPEECH_WPS", 2.3))
 
 
 def normalize_shot_av(src: str, dst: str, max_dur: float | None = None) -> None:

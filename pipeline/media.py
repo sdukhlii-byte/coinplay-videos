@@ -42,6 +42,23 @@ def probe_duration(path: str) -> float:
     return float(json.loads(proc.stdout)["format"]["duration"])
 
 
+def estimate_speech_sec(dialogue: list | None, wps: float = 2.3) -> float:
+    """
+    Грубая оценка длительности речи шота по тексту реплик (сек). 0 = молчаливый шот.
+    Общий источник правды для (а) обрезки хвостов в compose и (б) выбора длины
+    Veo-клипа на сабмите — чтобы они не расходились.
+    """
+    words = lines = 0
+    for d in (dialogue or []):
+        t = str(d.get("line", "")).strip()
+        if t:
+            words += len(t.split())
+            lines += 1
+    if not words:
+        return 0.0
+    return words / max(1.5, wps) + lines * 0.35
+
+
 def has_audio(path: str) -> bool:
     """True, если в файле есть хотя бы одна аудиодорожка."""
     proc = subprocess.run(

@@ -198,6 +198,11 @@ KENBURNS_TTS = _flag("KENBURNS_TTS", True)
 #      и ролик не упадёт. Нужен FAL_KEY.
 IMAGE_FALLBACK_ENABLED   = _flag("IMAGE_FALLBACK_ENABLED", True)
 FAL_FALLBACK_IMAGE_MODEL = _opt("FAL_FALLBACK_IMAGE_MODEL", "fal-ai/flux/dev")
+# IMAGE_SAFE_FIRST=1 — не делать спекулятивный «голый» первый вызов, а сразу слать
+# кейфрейм с явной «чистой» оговоркой. Для контента, который ЗАВЕДОМО триггерит фильтр
+# (романтика и т.п.) это экономит лишний вызов Gemini и убирает WARNING-и в логах.
+# Лёгкий минус: все картинки чуть «причёсаннее» (fully clothed / non-sexual).
+IMAGE_SAFE_FIRST = _flag("IMAGE_SAFE_FIRST", False)
 
 # ── ВИДЕО-ДВИЖОК ───────────────────────────────────────────────────────────────
 # VIDEO_ENGINE=veo   — Veo 3.1 image-to-video с НАТИВНЫМ аудио: персонажи сами
@@ -240,7 +245,7 @@ VEO_CAPTIONS   = _opt("VEO_CAPTIONS", "off").strip().lower()
 # есть собственный эмбиент/речь, музыка чаще мешает).
 VEO_MUSIC_UNDER = _flag("VEO_MUSIC_UNDER", False)
 # В Veo-режиме шотов меньше: каждый — отдельная ~8-сек сцена с речью.
-DEFAULT_SHOTS_VEO = int(_opt("DEFAULT_SHOTS_VEO", "3"))
+DEFAULT_SHOTS_VEO = int(_opt("DEFAULT_SHOTS_VEO", "7"))
 
 # ── ELEVENLABS: ПУЛ ГОЛОСОВ / ПРОФИЛИ ПЕРСОНАЖЕЙ ───────────────────────────────
 # Формат «фрукты спорят» живёт за счёт РАЗНЫХ голосов у персонажей. Но если у вас
@@ -314,7 +319,7 @@ def voice_profile(role: int, language: str) -> dict:
 # ── БРЕНД-МАСКОТ (камео) ───────────────────────────────────────────────────────
 # Если включено — сценаристу разрешается вывести фирменного маскота Coinplay в
 # финальном шоте, чтобы он НАТИВНО подал бренд-панчлайн (а не баннер «жми бонус»).
-BRAND_MASCOT_CAMEO = _flag("BRAND_MASCOT_CAMEO", True)
+BRAND_MASCOT_CAMEO = _flag("BRAND_MASCOT_CAMEO", False)
 BRAND_NAME = _opt("BRAND_NAME", "Coinplay")
 BRAND_DOMAIN = _opt("BRAND_DOMAIN", "coinplay.com")
 CTA_TEXT = _opt("CTA_TEXT", "COINPLAY.COM")
